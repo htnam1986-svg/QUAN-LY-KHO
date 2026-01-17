@@ -3,688 +3,612 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PT Warehouse ERP - Smart Search Doc</title>
+    <title>PT ERP - Enterprise Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .active-link { background: #4f46e5; color: white; transition: all 0.2s ease; }
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+    <style id="main-font-style">
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono&family=Be+Vietnam+Pro:wght@300;400;700&display=swap');
+        :root { --font-main: 'Inter', sans-serif; }
+        body { font-family: var(--font-main); background-color: #f8fafc; color: #1e293b; }
+        .misa-sidebar { width: 260px; background: #0f172a; color: #94a3b8; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; cursor: pointer; border-left: 4px solid transparent; transition: 0.2s; }
+        .nav-item:hover { background: #1e293b; color: white; }
+        .nav-active { background: #1e293b; color: white; border-left-color: #3b82f6; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        .btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .table-misa th { background: #f1f5f9; color: #475569; font-size: 11px; text-transform: uppercase; padding: 12px; }
+        .table-misa td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .modal-overlay { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); }
+        .badge-stock { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .modal-overlay { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); }
-        input[type="checkbox"] { width: 1.1rem; height: 1.1rem; cursor: pointer; accent-color: #4f46e5; }
-        
-        /* Hiệu ứng danh sách tìm kiếm trong phiếu */
-        .search-results-container {
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.75rem;
-            margin-top: 0.25rem;
-            display: none;
-            background: white;
-            position: absolute;
-            width: 100%;
-            z-index: 50;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-        .search-item:hover { background-color: #f8fafc; cursor: pointer; }
     </style>
 </head>
-<body class="bg-[#f8fafc] text-slate-900 flex h-screen overflow-hidden">
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Màn hình khóa -->
+    <div id="lock-screen" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+            <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="lock" class="w-10 h-10"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Hệ thống đang khóa</h2>
+            <p class="text-slate-500 mb-6">Vui lòng nhập mật khẩu để truy cập</p>
+            <input type="password" id="unlock-pass" placeholder="Mật khẩu" class="w-full p-4 border rounded-xl mb-4 text-center text-xl tracking-widest outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="checkUnlock()" class="w-full bg-blue-600 text-white p-4 rounded-xl font-bold hover:bg-blue-700 transition">Mở khóa</button>
+        </div>
+    </div>
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-sm z-20">
-        <div class="p-6">
-            <div class="flex items-center gap-3 mb-8">
-                <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg">
-                    <i data-lucide="package" class="w-6 h-6"></i>
-                </div>
-                <h1 class="font-bold text-lg tracking-tight">PT ERP PRO</h1>
+    <aside id="app-sidebar" class="misa-sidebar flex flex-col shrink-0">
+        <div class="p-6 mb-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-500 p-2 rounded-lg text-white"><i data-lucide="database"></i></div>
+                <h1 class="text-xl font-bold text-white tracking-tight">PT ERP</h1>
             </div>
-            
-            <nav class="space-y-1">
-                <a href="#" onclick="switchTab('inventory')" id="nav-inventory" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 transition-all font-medium">
-                    <i data-lucide="layout-grid" class="w-5 h-5"></i> Kho hàng
-                </a>
-                <a href="#" onclick="switchTab('documents')" id="nav-documents" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 transition-all font-medium">
-                    <i data-lucide="file-text" class="w-5 h-5"></i> Chứng từ
-                </a>
-                <a href="#" onclick="switchTab('partners')" id="nav-partners" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 transition-all font-medium">
-                    <i data-lucide="users" class="w-5 h-5"></i> Đối tác
-                </a>
-                <a href="#" onclick="switchTab('reports')" id="nav-reports" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 transition-all font-medium">
-                    <i data-lucide="pie-chart" class="w-5 h-5"></i> Báo cáo
-                </a>
-                <a href="#" onclick="switchTab('settings')" id="nav-settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 transition-all font-medium">
-                    <i data-lucide="settings" class="w-5 h-5"></i> Cấu hình
-                </a>
-            </nav>
+            <div class="mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Enterprise Edition</div>
         </div>
-        <div class="mt-auto p-6 border-t border-slate-100">
-            <div id="live-clock" class="text-[11px] font-bold text-slate-400 tabular-nums uppercase">--:--:--</div>
+
+        <nav class="flex-1 space-y-1">
+            <div onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item"><i data-lucide="layout-grid" class="w-5 h-5"></i> Tổng quan</div>
+            <div onclick="switchTab('inventory')" id="nav-inventory" class="nav-item"><i data-lucide="package" class="w-5 h-5"></i> Kho hàng</div>
+            <div onclick="switchTab('import')" id="nav-import" class="nav-item"><i data-lucide="log-in" class="w-5 h-5"></i> Nhập hàng</div>
+            <div onclick="switchTab('sale')" id="nav-sale" class="nav-item"><i data-lucide="shopping-bag" class="w-5 h-5"></i> Bán hàng</div>
+            <div onclick="switchTab('partners')" id="nav-partners" class="nav-item"><i data-lucide="users" class="w-5 h-5"></i> Đối tác</div>
+            <div onclick="switchTab('settings')" id="nav-settings" class="nav-item"><i data-lucide="settings-2" class="w-5 h-5"></i> Cài đặt</div>
+        </nav>
+
+        <div class="p-6 border-t border-slate-800">
+            <button onclick="lockSystem()" class="flex items-center gap-2 text-xs hover:text-white transition">
+                <i data-lucide="log-out" class="w-4 h-4 text-rose-500"></i> Khóa hệ thống
+            </button>
         </div>
     </aside>
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col min-w-0">
-        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-10 gap-4">
-            <div class="flex items-center gap-6 flex-1 max-w-2xl">
-                <h2 id="tab-title" class="text-lg font-bold text-slate-800 whitespace-nowrap">Kho hàng</h2>
-                <div class="relative flex-1">
-                    <i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                    <input type="text" id="main-search" oninput="handleSmartSearch(this.value)" placeholder='Tìm nhanh (ví dụ: Van*DN25)...' class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+        <header class="h-16 bg-white border-b flex items-center justify-between px-8 shadow-sm">
+            <h2 id="tab-title" class="font-bold text-slate-800 text-lg">Tổng quan</h2>
+            <div class="flex items-center gap-6">
+                <div id="live-clock" class="text-sm font-mono text-slate-500"></div>
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                    <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <span class="text-[11px] font-bold text-slate-600 uppercase">Trực tuyến</span>
                 </div>
             </div>
-            <div class="flex items-center gap-3" id="header-actions"></div>
         </header>
 
-        <section id="content-area" class="flex-1 overflow-auto p-8 custom-scroll bg-[#fcfcfd]">
-            <!-- Content render here -->
-        </section>
+        <div id="content-area" class="flex-1 overflow-auto p-8 custom-scroll"></div>
     </main>
 
-    <!-- Modal -->
-    <div id="modal-container" class="fixed inset-0 z-50 flex items-center justify-center modal-overlay hidden">
-        <div id="modal-content" class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scroll relative"></div>
-    </div>
-
-    <!-- Toast -->
-    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none opacity-0 translate-y-5 transition-all">
-        <div id="toast-body" class="bg-slate-900 text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium"></div>
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-8 right-8 z-[200] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3">
+            <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+            <span id="toast-msg" class="text-sm font-medium">Thành công</span>
+        </div>
     </div>
 
     <script>
-        // --- DATA STATE ---
-        let state = JSON.parse(localStorage.getItem('PT_ERP_PRO_STATE')) || {
+        // --- State Management ---
+        let state = JSON.parse(localStorage.getItem('PT_ERP_ENT_STATE')) || {
             inventory: [],
-            documents: [],
             partners: [],
-            systemPass: '1234'
+            history: [],
+            settings: { font: 'Inter', pass: '1234', isLocked: true }
         };
 
-        const saveState = () => localStorage.setItem('PT_ERP_PRO_STATE', JSON.stringify(state));
+        let selectedItems = new Set();
+        let searchQuery = "";
 
-        function showToast(msg, success = true) {
-            const t = document.getElementById('toast');
-            const tb = document.getElementById('toast-body');
-            tb.innerText = msg;
-            tb.className = `px-6 py-3 rounded-full shadow-lg text-sm font-medium ${success ? 'bg-indigo-600' : 'bg-rose-500'}`;
-            t.classList.remove('opacity-0', 'translate-y-5');
-            setTimeout(() => t.classList.add('opacity-0', 'translate-y-5'), 3000);
+        const saveState = () => localStorage.setItem('PT_ERP_ENT_STATE', JSON.stringify(state));
+
+        // --- Auth ---
+        function checkUnlock() {
+            const val = document.getElementById('unlock-pass').value;
+            if(val === state.settings.pass) {
+                state.settings.isLocked = false;
+                document.getElementById('lock-screen').classList.add('hidden');
+            } else {
+                showToast("Sai mật khẩu!", "rose");
+            }
         }
 
-        function handleSmartSearch(query) {
-            const currentTab = document.querySelector('aside nav a.active-link').id.replace('nav-', '');
-            const keywords = query.toLowerCase().split('*').map(k => k.trim()).filter(k => k !== '');
-            let targetSelector = '';
-            if (currentTab === 'inventory') targetSelector = '#inventory-table-body tr';
-            else if (currentTab === 'documents') targetSelector = '#docs-table-body tr';
-            else if (currentTab === 'partners') targetSelector = '#partners-table-body tr';
-            
-            if (!targetSelector) return;
-            document.querySelectorAll(targetSelector).forEach(row => {
-                const text = row.innerText.toLowerCase();
-                row.style.display = (keywords.length === 0 || keywords.every(kw => text.includes(kw))) ? '' : 'none';
-            });
+        function lockSystem() {
+            state.settings.isLocked = true;
+            document.getElementById('lock-screen').classList.remove('hidden');
+            document.getElementById('unlock-pass').value = '';
         }
 
-        // --- NAVIGATION ---
+        // --- Navigation ---
         function switchTab(tab) {
-            document.querySelectorAll('aside nav a').forEach(a => a.classList.remove('active-link'));
-            document.getElementById(`nav-${tab}`).classList.add('active-link');
-            document.getElementById('tab-title').innerText = 
-                tab === 'inventory' ? 'Kho hàng' : 
-                tab === 'documents' ? 'Chứng từ' : 
-                tab === 'partners' ? 'Đối tác' : 
-                tab === 'reports' ? 'Báo cáo' : 'Cấu hình';
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('nav-active'));
+            document.getElementById(`nav-${tab}`).classList.add('nav-active');
+            document.getElementById('tab-title').innerText = document.getElementById(`nav-${tab}`).innerText;
+            selectedItems.clear(); // Reset selection when switching tabs
             renderContent(tab);
         }
 
         function renderContent(tab) {
             const area = document.getElementById('content-area');
-            const actions = document.getElementById('header-actions');
-            actions.innerHTML = '';
-
-            if (tab === 'inventory') {
-                actions.innerHTML = `
-                    <button id="btn-delete-multi" onclick="deleteMultipleProducts()" class="hidden px-4 py-2 bg-rose-50 text-rose-600 rounded-lg font-bold text-xs hover:bg-rose-100 transition">Xóa đã chọn</button>
-                    <label class="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold text-xs hover:bg-emerald-100 transition cursor-pointer flex items-center gap-2">
-                        <i data-lucide="file-up" class="w-4 h-4"></i> Nhập Excel
-                        <input type="file" accept=".xlsx, .xls" class="hidden" onchange="handleExcelUpload(this)">
-                    </label>
-                    <button onclick="openProductModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-xs hover:bg-indigo-700">+ Thêm hàng</button>
-                `;
-                area.innerHTML = `
-                    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase text-slate-400 font-bold">
-                                    <th class="p-4 w-10 text-center"><input type="checkbox" onchange="toggleSelectAll(this)"></th>
-                                    <th class="p-4">Mã hàng / Tên</th>
-                                    <th class="p-4 text-center">ĐVT</th>
-                                    <th class="p-4 text-right">Tồn kho</th>
-                                    <th class="p-4 text-right">Giá bán</th>
-                                    <th class="p-4">Ghi chú</th>
-                                    <th class="p-4 text-center">Tác vụ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="inventory-table-body">
-                                ${state.inventory.map((item) => `
-                                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                        <td class="p-4 text-center"><input type="checkbox" class="product-cb" value="${item.id}" onchange="updateMultiDeleteBtn()"></td>
-                                        <td class="p-4">
-                                            <div class="font-mono text-[10px] text-indigo-500 font-bold">${item.id}</div>
-                                            <div class="font-bold text-slate-700">${item.name}</div>
-                                        </td>
-                                        <td class="p-4 text-center text-slate-500 text-sm">${item.unit}</td>
-                                        <td class="p-4 text-right font-black ${item.qty < 5 ? 'text-rose-500' : 'text-slate-800'}">${item.qty}</td>
-                                        <td class="p-4 text-right font-bold text-indigo-600">${new Intl.NumberFormat('vi-VN').format(item.priceSell)}đ</td>
-                                        <td class="p-4 text-sm text-slate-400 italic truncate max-w-[150px]">${item.note || ''}</td>
-                                        <td class="p-4 text-center">
-                                            <div class="flex items-center justify-center gap-2">
-                                                <button onclick="openProductModal('${item.id}')" class="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-lg"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
-                                                <button onclick="deleteProduct('${item.id}')" class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else if (tab === 'documents') {
-                actions.innerHTML = `
-                    <button onclick="openDocModal('IMPORT')" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-xs">+ Nhập kho</button>
-                    <button onclick="openDocModal('EXPORT')" class="px-4 py-2 bg-rose-600 text-white rounded-lg font-bold text-xs">+ Xuất kho</button>
-                `;
-                area.innerHTML = `
-                    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase text-slate-400 font-bold">
-                                    <th class="p-4">Ngày / Loại</th>
-                                    <th class="p-4">Đối tác</th>
-                                    <th class="p-4">Sản phẩm</th>
-                                    <th class="p-4 text-right">SL</th>
-                                    <th class="p-4 text-right">Tổng tiền</th>
-                                    <th class="p-4 text-center w-20">Tác vụ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="docs-table-body">
-                                ${state.documents.map((d, idx) => `
-                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
-                                        <td class="p-4">
-                                            <div class="text-[10px] text-slate-400">${d.date}</div>
-                                            <span class="px-2 py-0.5 ${d.type === 'IMPORT' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} rounded text-[10px] font-bold uppercase">${d.type === 'IMPORT' ? 'Nhập' : 'Xuất'}</span>
-                                        </td>
-                                        <td class="p-4 font-bold text-slate-700 text-sm">${d.partner}</td>
-                                        <td class="p-4 text-sm text-slate-600">${d.itemName}</td>
-                                        <td class="p-4 text-right font-bold">${d.qty}</td>
-                                        <td class="p-4 text-right font-bold text-slate-800">${new Intl.NumberFormat('vi-VN').format(d.total)}đ</td>
-                                        <td class="p-4 text-center">
-                                            <div class="flex items-center justify-center gap-2">
-                                                <button onclick="editDocument(${idx})" class="p-1.5 hover:bg-indigo-50 text-indigo-500 rounded-lg"><i data-lucide="edit" class="w-4 h-4"></i></button>
-                                                <button onclick="deleteDocument(${idx})" class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else if (tab === 'partners') {
-                actions.innerHTML = `<button onclick="openPartnerModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-xs hover:bg-indigo-700">+ Đối tác</button>`;
-                area.innerHTML = `
-                    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase text-slate-400 font-bold">
-                                    <th class="p-4">Tên đối tác</th>
-                                    <th class="p-4">Loại / MST</th>
-                                    <th class="p-4">Số điện thoại</th>
-                                    <th class="p-4">Địa chỉ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="partners-table-body">
-                                ${state.partners.map(p => `
-                                    <tr class="border-b border-slate-100">
-                                        <td class="p-4 font-bold text-slate-700">${p.name}</td>
-                                        <td class="p-4">
-                                            <span class="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600 block w-fit mb-1">${p.type}</span>
-                                            <div class="text-[11px] font-mono text-indigo-500 font-bold">${p.taxCode || '---'}</div>
-                                        </td>
-                                        <td class="p-4 text-sm text-slate-600">${p.phone || '---'}</td>
-                                        <td class="p-4 text-sm text-slate-500">${p.address || '---'}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else if (tab === 'reports') {
-                const revenue = state.documents.filter(d => d.type === 'EXPORT').reduce((acc, curr) => acc + curr.total, 0);
-                const importCost = state.documents.filter(d => d.type === 'IMPORT').reduce((acc, curr) => acc + curr.total, 0);
-                area.innerHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="bg-white p-6 rounded-3xl border shadow-sm">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Doanh thu (Xuất)</p>
-                            <h3 class="text-2xl font-black text-indigo-600">${new Intl.NumberFormat('vi-VN').format(revenue)}đ</h3>
-                        </div>
-                        <div class="bg-white p-6 rounded-3xl border shadow-sm">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Chi phí (Nhập)</p>
-                            <h3 class="text-2xl font-black text-rose-500">${new Intl.NumberFormat('vi-VN').format(importCost)}đ</h3>
-                        </div>
-                        <div class="bg-white p-6 rounded-3xl border shadow-sm">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Lợi nhuận gộp</p>
-                            <h3 class="text-2xl font-black text-emerald-600">${new Intl.NumberFormat('vi-VN').format(revenue - importCost)}đ</h3>
-                        </div>
-                    </div>
-                `;
-            } else if (tab === 'settings') {
-                area.innerHTML = `
-                    <div class="max-w-xl mx-auto bg-white p-8 rounded-3xl border shadow-sm space-y-6">
-                        <h3 class="font-bold text-lg">Cấu hình hệ thống</h3>
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Mật khẩu mới</label>
-                            <input type="password" id="new-sys-pass" class="w-full p-3 bg-slate-50 border rounded-xl" value="${state.systemPass}">
-                            <button onclick="updatePassword()" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Cập nhật mật khẩu</button>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <button onclick="exportData()" class="p-4 bg-slate-50 border rounded-2xl font-bold text-xs flex items-center justify-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Xuất JSON</button>
-                            <label class="p-4 bg-slate-50 border rounded-2xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer text-center"><i data-lucide="upload" class="w-4 h-4"></i> Nhập JSON<input type="file" class="hidden" onchange="importData(this)"></label>
-                        </div>
-                        <button onclick="factoryReset()" class="w-full text-rose-500 font-bold text-xs mt-4">Xóa toàn bộ dữ liệu</button>
-                    </div>
-                `;
+            area.innerHTML = '';
+            switch(tab) {
+                case 'dashboard': renderDashboard(area); break;
+                case 'inventory': renderInventory(area); break;
+                case 'import': renderDocumentForm(area, 'NHAP'); break;
+                case 'sale': renderDocumentForm(area, 'XUAT'); break;
+                case 'partners': renderPartners(area); break;
+                case 'settings': renderSettings(area); break;
             }
             lucide.createIcons();
         }
 
-        // --- SMART SEARCH IN MODAL ---
-        let selectedProductForDoc = null;
-
-        function handleProductSearchInDoc(q) {
-            const resultsBox = document.getElementById('search-results-box');
-            if(!q.trim()) { resultsBox.style.display = 'none'; return; }
-            
-            const filtered = state.inventory.filter(i => i.name.toLowerCase().includes(q.toLowerCase()) || i.id.toLowerCase().includes(q.toLowerCase()));
-            
-            if(filtered.length === 0) {
-                resultsBox.innerHTML = `<div class="p-4 text-sm text-slate-400 italic">Không tìm thấy hàng...</div>`;
-            } else {
-                resultsBox.innerHTML = filtered.map(i => `
-                    <div onclick="selectProductForDoc('${i.id}')" class="search-item p-3 border-b last:border-0">
-                        <div class="font-bold text-sm text-slate-700">${i.name}</div>
-                        <div class="flex justify-between text-[10px] text-slate-500 font-medium">
-                            <span>Mã: ${i.id}</span>
-                            <span>Tồn: <b class="${i.qty < 5 ? 'text-rose-500' : 'text-indigo-600'}">${i.qty}</b> ${i.unit}</span>
-                        </div>
+        // --- Dashboard ---
+        function renderDashboard(area) {
+            const revenue = state.history.filter(h => h.type === 'XUAT').reduce((a, b) => a + b.total, 0);
+            const cost = state.history.filter(h => h.type === 'NHAP').reduce((a, b) => a + b.total, 0);
+            area.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="card p-6 border-t-4 border-blue-500">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Giá trị bán hàng</div>
+                        <div class="text-2xl font-black">${formatVND(revenue)}</div>
                     </div>
-                `).join('');
+                    <div class="card p-6 border-t-4 border-emerald-500">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Giá trị nhập kho</div>
+                        <div class="text-2xl font-black">${formatVND(cost)}</div>
+                    </div>
+                    <div class="card p-6 border-t-4 border-rose-500">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Số mặt hàng</div>
+                        <div class="text-2xl font-black">${state.inventory.length} mã</div>
+                    </div>
+                    <div class="card p-6 border-t-4 border-orange-500">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Cảnh báo tồn kho</div>
+                        <div class="text-2xl font-black text-orange-600">${state.inventory.filter(i => i.qty < 5).length}</div>
+                    </div>
+                </div>
+                <div class="card p-6">
+                    <h3 class="font-bold text-slate-700 mb-4">Chứng từ gần đây</h3>
+                    <table class="w-full text-left table-misa">
+                        <thead>
+                            <tr><th>Số CT</th><th>Ngày</th><th>Loại</th><th>Đối tác</th><th class="text-right">Tổng tiền</th></tr>
+                        </thead>
+                        <tbody>
+                            ${state.history.slice(-5).reverse().map(h => `
+                                <tr>
+                                    <td class="font-bold text-blue-600">${h.id}</td>
+                                    <td class="text-xs text-slate-500">${h.date}</td>
+                                    <td><span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.type==='NHAP'?'bg-emerald-100 text-emerald-700':'bg-blue-100 text-blue-700'}">${h.type}</span></td>
+                                    <td class="text-sm font-medium">${h.partner}</td>
+                                    <td class="text-right font-bold">${formatVND(h.total)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // --- Inventory ---
+        function renderInventory(area) {
+            area.innerHTML = `
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+                    <div class="flex gap-2">
+                        <label class="btn bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700">
+                            <i data-lucide="file-spreadsheet"></i> Nhập từ Excel
+                            <input type="file" class="hidden" accept=".xlsx, .xls, .csv" onchange="importExcel(this)">
+                        </label>
+                        <button id="btn-delete-multi" onclick="deleteMultipleItems()" class="btn border border-rose-200 text-rose-500 hover:bg-rose-50 ${selectedItems.size === 0 ? 'opacity-50 pointer-events-none' : ''}">
+                            <i data-lucide="trash-2"></i> Xóa đã chọn (${selectedItems.size})
+                        </button>
+                    </div>
+                    <div class="relative w-full md:w-80">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                        <input type="text" id="inventory-search-input" value="${searchQuery}" oninput="searchInventory(this.value)" placeholder="Tìm 'tên*mã' hoặc 'tên*giá'..." class="w-full pl-10 pr-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="card overflow-hidden overflow-x-auto">
+                    <table class="w-full text-left table-misa border-collapse">
+                        <thead>
+                            <tr>
+                                <th class="w-10"><input type="checkbox" id="check-all" onchange="toggleAllItems(this)"></th>
+                                <th>Sản phẩm</th>
+                                <th>Đơn vị</th>
+                                <th class="text-right">Tồn kho</th>
+                                <th class="text-right">Giá nhập</th>
+                                <th class="text-right">Giá bán</th>
+                                <th class="text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-body">
+                            ${renderInventoryRows(multiKeywordFilter(state.inventory, searchQuery))}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function renderInventoryRows(items) {
+            if(items.length === 0) return `<tr><td colspan="7" class="text-center py-10 text-slate-400 italic">Không có dữ liệu</td></tr>`;
+            return items.map(item => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td><input type="checkbox" class="item-checkbox" onchange="toggleItemSelect('${item.id}', this)" ${selectedItems.has(item.id) ? 'checked' : ''}></td>
+                    <td>
+                        <div class="font-bold text-slate-700">${item.name}</div>
+                        <div class="text-[10px] text-blue-500 font-mono uppercase">Mã: ${item.id}</div>
+                    </td>
+                    <td>${item.unit}</td>
+                    <td class="text-right"><span class="badge-stock ${item.qty < 5 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-700'}">${item.qty}</span></td>
+                    <td class="text-right text-slate-500">${formatVND(item.priceBuy)}</td>
+                    <td class="text-right font-bold text-blue-600">${formatVND(item.priceSell)}</td>
+                    <td class="text-center">
+                        <button onclick="deleteSingleItem('${item.id}')" class="p-2 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function searchInventory(q) {
+            searchQuery = q;
+            const filtered = multiKeywordFilter(state.inventory, q);
+            document.getElementById('inventory-body').innerHTML = renderInventoryRows(filtered);
+            updateDeleteButton();
+            lucide.createIcons();
+        }
+
+        function toggleItemSelect(id, el) {
+            if(el.checked) selectedItems.add(id);
+            else selectedItems.delete(id);
+            updateDeleteButton();
+        }
+
+        function toggleAllItems(el) {
+            const filtered = multiKeywordFilter(state.inventory, searchQuery);
+            const checkboxes = document.querySelectorAll('.item-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = el.checked;
+            });
+            
+            if(el.checked) {
+                filtered.forEach(item => selectedItems.add(item.id));
+            } else {
+                filtered.forEach(item => selectedItems.delete(item.id));
             }
-            resultsBox.style.display = 'block';
+            updateDeleteButton();
         }
 
-        function selectProductForDoc(id) {
-            selectedProductForDoc = state.inventory.find(i => i.id === id);
-            document.getElementById('doc-product-search-input').value = selectedProductForDoc.name;
-            document.getElementById('search-results-box').style.display = 'none';
-            document.getElementById('doc-item-id-hidden').value = id;
-            showToast(`Đã chọn: ${selectedProductForDoc.name}`);
+        function updateDeleteButton() {
+            const btn = document.getElementById('btn-delete-multi');
+            if(!btn) return;
+            btn.innerText = `Xóa đã chọn (${selectedItems.size})`;
+            if(selectedItems.size > 0) {
+                btn.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                btn.classList.add('opacity-50', 'pointer-events-none');
+            }
         }
 
-        // --- EXCEL UPLOAD ---
-        function handleExcelUpload(input) {
+        function deleteSingleItem(id) {
+            if(confirm("Xác nhận xóa mặt hàng này?")) {
+                state.inventory = state.inventory.filter(i => i.id !== id);
+                selectedItems.delete(id);
+                saveState();
+                renderContent('inventory');
+            }
+        }
+
+        function deleteMultipleItems() {
+            if(selectedItems.size === 0) return;
+            if(confirm(`Xác nhận xóa ${selectedItems.size} mặt hàng đã chọn?`)) {
+                state.inventory = state.inventory.filter(i => !selectedItems.has(i.id));
+                selectedItems.clear();
+                saveState();
+                renderContent('inventory');
+            }
+        }
+
+        // --- Excel ---
+        function importExcel(input) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const json = XLSX.utils.sheet_to_json(sheet);
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet);
+                
+                rows.forEach(row => {
+                    const name = row['Tên hàng'] || row['Ten hang'] || '';
+                    if(!name) return;
+                    const priceBuy = parseFloat(row['Giá nhập'] || row['Gia nhap'] || 0);
+                    const priceSell = parseFloat(row['Giá bán'] || row['Gia ban'] || 0);
+                    const unit = row['Đơn vị'] || row['Don vi'] || 'Cái';
+                    const qty = parseFloat(row['Số lượng'] || row['So luong'] || 0);
 
-                    json.forEach(r => {
-                        const name = (r['Tên hàng'] || r['Ten hang'] || '').toString().trim();
-                        if (name) {
-                            const qty = parseFloat(r['Số lượng'] || r['So luong']) || 0;
-                            const idx = state.inventory.findIndex(i => i.name.toLowerCase() === name.toLowerCase());
-                            if (idx > -1) {
-                                state.inventory[idx].qty += qty;
-                            } else {
-                                state.inventory.push({
-                                    id: 'EX' + Math.floor(1000 + Math.random() * 8999),
-                                    name: name,
-                                    unit: r['Đơn vị'] || r['Don vi'] || 'Cái',
-                                    qty: qty,
-                                    priceBuy: parseFloat(r['Giá nhập'] || r['Gia nhap'] || 0),
-                                    priceSell: parseFloat(r['Giá bán'] || r['Gia ban'] || 0),
-                                    note: r['Ghi chú'] || r['Ghi chu'] || ''
-                                });
-                            }
-                        }
-                    });
-                    saveState(); renderContent('inventory'); showToast("Đã đồng bộ dữ liệu Excel");
-                } catch (err) { showToast("Lỗi đọc Excel", false); }
+                    const existing = state.inventory.find(i => i.name === name && i.priceBuy === priceBuy);
+                    if(existing) {
+                        existing.qty += qty;
+                    } else {
+                        state.inventory.push({
+                            id: 'HH' + Math.floor(1000 + Math.random() * 8999),
+                            name, unit, qty, priceBuy, priceSell
+                        });
+                    }
+                });
+                saveState();
+                renderContent('inventory');
+                showToast(`Đã đồng bộ thành công.`);
             };
             reader.readAsArrayBuffer(input.files[0]);
         }
 
-        // --- INVENTORY LOGIC ---
-        function openProductModal(id = null) {
-            const p = id ? state.inventory.find(i => i.id === id) : null;
-            const mc = document.getElementById('modal-content');
-            mc.innerHTML = `
-                <div class="p-6 border-b flex justify-between items-center bg-slate-50/50">
-                    <h2 class="text-xl font-bold">${id ? 'Cập nhật hàng hóa' : 'Thêm sản phẩm'}</h2>
-                    <button onclick="closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <div class="p-8 space-y-4">
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Tên sản phẩm</label>
-                        <input type="text" id="p-name" value="${p ? p.name : ''}" class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Đơn vị</label>
-                            <input type="text" id="p-unit" value="${p ? p.unit : ''}" class="w-full p-3 bg-slate-50 border rounded-xl">
+        // --- Form NHAP/XUAT ---
+        let currentFormItems = [];
+        function renderDocumentForm(area, type) {
+            currentFormItems = [];
+            area.innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+                    <div class="lg:col-span-2 flex flex-col gap-6">
+                        <div class="card p-6">
+                            <div class="flex items-center gap-3 mb-6">
+                                <i data-lucide="search" class="w-5 h-5 text-slate-400"></i>
+                                <input type="text" id="product-search" oninput="handleDocSearch(this.value, '${type}')" placeholder="Tìm tên*mã sản phẩm..." class="w-full text-lg outline-none border-b-2 border-transparent focus:border-blue-500 pb-2">
+                            </div>
+                            <div id="search-results" class="space-y-2 max-h-60 overflow-auto custom-scroll"></div>
                         </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Số lượng ban đầu</label>
-                            <input type="number" id="p-qty" value="${p ? p.qty : 0}" class="w-full p-3 bg-slate-50 border rounded-xl">
+                        <div class="card flex-1 flex flex-col overflow-hidden min-h-[300px]">
+                            <div class="p-4 border-b bg-slate-50 font-bold text-xs uppercase tracking-widest text-slate-500">Danh mục chọn</div>
+                            <div id="form-items" class="flex-1 overflow-auto custom-scroll p-4 space-y-3">
+                                <div class="text-center py-20 text-slate-300 italic">Trống</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Giá nhập</label>
-                            <input type="number" id="p-buy" value="${p ? p.priceBuy : 0}" class="w-full p-3 bg-slate-50 border rounded-xl">
+                    <div class="flex flex-col gap-6">
+                        <div class="card p-6 space-y-4">
+                            <h3 class="font-bold text-lg">Thông tin phiếu</h3>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 mb-1">Đối tác</label>
+                                <input type="text" id="partner-input" list="partner-list" placeholder="Tên khách lẻ hoặc chọn lưu sẵn..." class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                <datalist id="partner-list">
+                                    ${state.partners.map(p => `<option value="${p.name}">`).join('')}
+                                </datalist>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 mb-1">Ngày lập</label>
+                                <input type="date" id="doc-date" value="${new Date().toISOString().split('T')[0]}" class="w-full p-2.5 border rounded-lg text-sm">
+                            </div>
                         </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Giá bán</label>
-                            <input type="number" id="p-sell" value="${p ? p.priceSell : 0}" class="w-full p-3 bg-slate-50 border rounded-xl">
+                        <div class="card p-6 bg-slate-900 text-white flex flex-col gap-4">
+                            <div class="flex justify-between items-center opacity-60 text-sm">
+                                <span>Tổng mặt hàng:</span>
+                                <span id="total-qty" class="font-bold">0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xl font-black">
+                                <span>TỔNG CỘNG:</span>
+                                <span id="total-amount" class="text-blue-400">0đ</span>
+                            </div>
+                            <button onclick="submitDocument('${type}')" class="w-full py-4 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 transition shadow-lg shadow-blue-900/20">LẬP PHIẾU</button>
                         </div>
                     </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Ghi chú</label>
-                        <textarea id="p-note" class="w-full p-3 bg-slate-50 border rounded-xl h-20">${p ? (p.note || '') : ''}</textarea>
-                    </div>
-                </div>
-                <div class="p-6 border-t flex justify-end gap-3 bg-slate-50/30">
-                    <button onclick="closeModal()" class="px-6 py-2.5 font-bold text-slate-400">Hủy</button>
-                    <button onclick="saveProduct('${id || ''}')" class="px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Lưu dữ liệu</button>
                 </div>
             `;
-            document.getElementById('modal-container').classList.remove('hidden');
             lucide.createIcons();
         }
 
-        function saveProduct(id) {
-            const name = document.getElementById('p-name').value.trim();
-            if(!name) return showToast("Vui lòng nhập tên", false);
-            
-            const data = {
-                name,
-                unit: document.getElementById('p-unit').value || 'Cái',
-                qty: parseFloat(document.getElementById('p-qty').value) || 0,
-                priceBuy: parseFloat(document.getElementById('p-buy').value) || 0,
-                priceSell: parseFloat(document.getElementById('p-sell').value) || 0,
-                note: document.getElementById('p-note').value
-            };
+        function handleDocSearch(q, type) {
+            const results = document.getElementById('search-results');
+            if(!q) { results.innerHTML = ''; return; }
+            let filtered = multiKeywordFilter(state.inventory, q);
+            if(type === 'XUAT') filtered = filtered.filter(i => i.qty > 0);
+            results.innerHTML = filtered.slice(0, 8).map(item => `
+                <div onclick="addFormItem('${item.id}', '${type}')" class="flex justify-between items-center p-3 border rounded-xl hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition group">
+                    <div>
+                        <div class="font-bold text-sm text-slate-700">${item.name}</div>
+                        <div class="text-[10px] text-slate-400">Tồn: ${item.qty} ${item.unit} | Giá: ${formatVND(type==='NHAP'?item.priceBuy:item.priceSell)}</div>
+                    </div>
+                    <i data-lucide="plus" class="w-5 h-5 text-blue-500 opacity-0 group-hover:opacity-100 transition"></i>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
 
-            if (id) {
-                const idx = state.inventory.findIndex(i => i.id === id);
-                state.inventory[idx] = { ...state.inventory[idx], ...data };
+        function addFormItem(id, type) {
+            const item = state.inventory.find(i => i.id === id);
+            const price = (type === 'NHAP') ? item.priceBuy : item.priceSell;
+            const existing = currentFormItems.find(f => f.id === id);
+            if(existing) {
+                existing.qty++;
             } else {
-                state.inventory.push({ id: 'SP' + Math.floor(Math.random() * 9999), ...data });
+                currentFormItems.push({ ...item, qty: 1, currentPrice: price });
             }
-            saveState(); closeModal(); renderContent('inventory'); showToast("Cập nhật kho thành công");
+            document.getElementById('product-search').value = '';
+            document.getElementById('search-results').innerHTML = '';
+            updateFormUI();
         }
 
-        function deleteProduct(id) {
-            if(confirm("Xóa mặt hàng này?")) {
-                state.inventory = state.inventory.filter(i => i.id !== id);
-                saveState(); renderContent('inventory'); showToast("Đã xóa");
+        function updateFormUI() {
+            const container = document.getElementById('form-items');
+            if(currentFormItems.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 text-slate-300 italic">Trống</div>`;
+            } else {
+                container.innerHTML = currentFormItems.map((item, idx) => `
+                    <div class="flex items-center gap-4 bg-white p-3 border rounded-xl shadow-sm">
+                        <div class="flex-1">
+                            <div class="font-bold text-sm truncate max-w-[200px]">${item.name}</div>
+                            <div class="text-xs text-slate-400">${formatVND(item.currentPrice)}</div>
+                        </div>
+                        <div class="flex items-center gap-2 bg-slate-50 p-1 rounded-lg">
+                            <button onclick="adjustFormQty(${idx}, -1)" class="w-7 h-7 flex items-center justify-center hover:bg-white rounded transition"><i data-lucide="minus" class="w-3 h-3"></i></button>
+                            <input type="number" value="${item.qty}" onchange="setFormQty(${idx}, this.value)" class="w-10 bg-transparent text-center font-bold text-sm outline-none">
+                            <button onclick="adjustFormQty(${idx}, 1)" class="w-7 h-7 flex items-center justify-center hover:bg-white rounded transition"><i data-lucide="plus" class="w-3 h-3"></i></button>
+                        </div>
+                        <div class="w-24 text-right font-black text-sm text-slate-700">${formatVND(item.qty * item.currentPrice)}</div>
+                        <button onclick="removeFormItem(${idx})" class="text-slate-300 hover:text-rose-500 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                `).join('');
             }
-        }
-
-        function toggleSelectAll(master) {
-            document.querySelectorAll('.product-cb').forEach(cb => cb.checked = master.checked);
-            updateMultiDeleteBtn();
-        }
-
-        function updateMultiDeleteBtn() {
-            const checked = document.querySelectorAll('.product-cb:checked').length;
-            const btn = document.getElementById('btn-delete-multi');
-            if(checked > 0) btn.classList.remove('hidden');
-            else btn.classList.add('hidden');
-        }
-
-        function deleteMultipleProducts() {
-            const ids = Array.from(document.querySelectorAll('.product-cb:checked')).map(cb => cb.value);
-            if(confirm(`Xóa ${ids.length} mặt hàng đã chọn?`)) {
-                state.inventory = state.inventory.filter(i => !ids.includes(i.id));
-                saveState(); renderContent('inventory'); showToast(`Đã xóa ${ids.length} mặt hàng`);
-            }
-        }
-
-        // --- DOCUMENTS LOGIC ---
-        function openDocModal(type) {
-            selectedProductForDoc = null;
-            const mc = document.getElementById('modal-content');
-            mc.innerHTML = `
-                <div class="p-6 border-b flex justify-between items-center ${type === 'IMPORT' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">
-                    <h2 class="text-xl font-bold">${type === 'IMPORT' ? 'Phiếu Nhập Kho' : 'Phiếu Xuất Kho'}</h2>
-                    <button onclick="closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <div class="p-8 space-y-5">
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Đối tác</label>
-                        <select id="doc-partner" class="w-full p-3 bg-slate-50 border rounded-xl">
-                            ${state.partners.length ? state.partners.map(p => `<option value="${p.name}">${p.name}</option>`).join('') : '<option value="Khách lẻ">Khách vãng lai</option>'}
-                        </select>
-                    </div>
-                    
-                    <div class="relative">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Tìm sản phẩm</label>
-                        <div class="relative">
-                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                            <input type="text" id="doc-product-search-input" oninput="handleProductSearchInDoc(this.value)" placeholder="Gõ tên hoặc mã hàng..." class="w-full pl-10 pr-4 py-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            <input type="hidden" id="doc-item-id-hidden">
-                        </div>
-                        <div id="search-results-box" class="search-results-container custom-scroll shadow-2xl"></div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Số lượng</label>
-                            <input type="number" id="doc-qty" value="1" class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Ghi chú phiếu</label>
-                            <input type="text" id="doc-note" class="w-full p-3 bg-slate-50 border rounded-xl outline-none" placeholder="...">
-                        </div>
-                    </div>
-                </div>
-                <div class="p-6 border-t flex justify-end gap-3 bg-slate-50/30">
-                    <button onclick="closeModal()" class="px-6 py-2.5 font-bold text-slate-400">Đóng</button>
-                    <button onclick="saveDocument('${type}')" class="px-8 py-2.5 ${type === 'IMPORT' ? 'bg-emerald-600' : 'bg-rose-600'} text-white font-bold rounded-xl shadow-lg">Lưu phiếu</button>
-                </div>
-            `;
-            document.getElementById('modal-container').classList.remove('hidden');
+            const totalQty = currentFormItems.length;
+            const totalAmount = currentFormItems.reduce((a, b) => a + (b.qty * b.currentPrice), 0);
+            document.getElementById('total-qty').innerText = totalQty;
+            document.getElementById('total-amount').innerText = formatVND(totalAmount);
             lucide.createIcons();
         }
 
-        function saveDocument(type) {
-            const itemId = document.getElementById('doc-item-id-hidden').value;
-            const qty = parseFloat(document.getElementById('doc-qty').value) || 0;
-            const itemIdx = state.inventory.findIndex(i => i.id === itemId);
-            
-            if (itemIdx === -1) return showToast("Vui lòng chọn hàng hóa!", false);
-            if (qty <= 0) return showToast("Số lượng không hợp lệ", false);
-            
-            const item = state.inventory[itemIdx];
-            if (type === 'EXPORT' && item.qty < qty) return showToast("Kho không đủ hàng!", false);
+        function adjustFormQty(idx, delta) {
+            currentFormItems[idx].qty += delta;
+            if(currentFormItems[idx].qty <= 0) currentFormItems.splice(idx, 1);
+            updateFormUI();
+        }
 
-            const total = qty * (type === 'IMPORT' ? item.priceBuy : item.priceSell);
-            state.documents.push({
-                date: new Date().toLocaleString('vi-VN'),
-                type,
-                partner: document.getElementById('doc-partner').value,
-                itemName: item.name,
-                itemId: itemId,
-                qty,
-                total,
-                note: document.getElementById('doc-note').value
+        function removeFormItem(idx) {
+            currentFormItems.splice(idx, 1);
+            updateFormUI();
+        }
+
+        function submitDocument(type) {
+            const partner = document.getElementById('partner-input').value.trim();
+            if(!partner) return alert("Vui lòng nhập tên đối tác");
+            if(currentFormItems.length === 0) return alert("Chưa có hàng hóa");
+
+            currentFormItems.forEach(fItem => {
+                const invItem = state.inventory.find(i => i.id === fItem.id);
+                if(invItem) {
+                    if(type === 'NHAP') invItem.qty += fItem.qty;
+                    else invItem.qty -= fItem.qty;
+                }
             });
 
-            if (type === 'IMPORT') state.inventory[itemIdx].qty += qty;
-            else state.inventory[itemIdx].qty -= qty;
-
-            saveState(); closeModal(); renderContent('documents'); showToast("Đã lập phiếu thành công");
-        }
-
-        function deleteDocument(idx) {
-            if(confirm("Xóa chứng từ này? Lưu ý: Không hoàn lại kho tự động.")) {
-                state.documents.splice(idx, 1);
-                saveState(); renderContent('documents'); showToast("Đã xóa chứng từ");
+            if(!state.partners.find(p => p.name === partner)) {
+                state.partners.push({id: 'DT'+Date.now().toString().slice(-4), name: partner, type: type === 'NHAP' ? 'NCC' : 'KH'});
             }
-        }
 
-        function editDocument(idx) {
-            const d = state.documents[idx];
-            const mc = document.getElementById('modal-content');
-            mc.innerHTML = `
-                <div class="p-6 border-b flex justify-between items-center bg-indigo-50">
-                    <h2 class="text-xl font-bold">Chỉnh sửa phiếu</h2>
-                    <button onclick="closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <div class="p-8 space-y-4">
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Đối tác</label>
-                        <select id="edoc-partner" class="w-full p-3 bg-slate-50 border rounded-xl">
-                            ${state.partners.map(p => `<option value="${p.name}" ${p.name === d.partner ? 'selected' : ''}>${p.name}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Số lượng</label>
-                            <input type="number" id="edoc-qty" value="${d.qty}" class="w-full p-3 bg-slate-50 border rounded-xl">
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Ghi chú</label>
-                            <input type="text" id="edoc-note" value="${d.note || ''}" class="w-full p-3 bg-slate-50 border rounded-xl">
-                        </div>
-                    </div>
-                </div>
-                <div class="p-6 border-t flex justify-end gap-3 bg-slate-50/30">
-                    <button onclick="closeModal()" class="px-6 py-2.5 font-bold text-slate-400">Đóng</button>
-                    <button onclick="updateDocument(${idx})" class="px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Cập nhật</button>
-                </div>
-            `;
-            document.getElementById('modal-container').classList.remove('hidden');
-            lucide.createIcons();
-        }
-
-        function updateDocument(idx) {
-            state.documents[idx].partner = document.getElementById('edoc-partner').value;
-            state.documents[idx].qty = parseFloat(document.getElementById('edoc-qty').value) || 0;
-            state.documents[idx].note = document.getElementById('edoc-note').value;
-            saveState(); closeModal(); renderContent('documents'); showToast("Đã lưu chỉnh sửa");
-        }
-
-        // --- PARTNERS ---
-        function openPartnerModal() {
-            const mc = document.getElementById('modal-content');
-            mc.innerHTML = `
-                <div class="p-6 border-b flex justify-between items-center bg-slate-50/50">
-                    <h2 class="text-xl font-bold">Thêm đối tác</h2>
-                    <button onclick="closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <div class="p-8 space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Loại</label>
-                            <select id="pt-type" class="w-full p-3 bg-slate-50 border rounded-xl"><option>Khách hàng</option><option>Nhà cung cấp</option></select>
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Tên đối tác</label>
-                            <input type="text" id="pt-name" class="w-full p-3 bg-slate-50 border rounded-xl">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">Mã số thuế</label>
-                            <input type="text" id="pt-tax" class="w-full p-3 bg-slate-50 border rounded-xl">
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">SĐT</label>
-                            <input type="text" id="pt-phone" class="w-full p-3 bg-slate-50 border rounded-xl">
-                        </div>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Địa chỉ</label>
-                        <textarea id="pt-address" class="w-full p-3 bg-slate-50 border rounded-xl h-20"></textarea>
-                    </div>
-                </div>
-                <div class="p-6 border-t flex justify-end gap-3 bg-slate-50/30">
-                    <button onclick="closeModal()" class="px-6 py-2.5 font-bold text-slate-400">Đóng</button>
-                    <button onclick="savePartner()" class="px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Lưu lại</button>
-                </div>
-            `;
-            document.getElementById('modal-container').classList.remove('hidden');
-            lucide.createIcons();
-        }
-
-        function savePartner() {
-            const name = document.getElementById('pt-name').value.trim();
-            if(!name) return showToast("Vui lòng nhập tên", false);
-            state.partners.push({
-                name, type: document.getElementById('pt-type').value,
-                taxCode: document.getElementById('pt-tax').value,
-                phone: document.getElementById('pt-phone').value,
-                address: document.getElementById('pt-address').value
+            const total = currentFormItems.reduce((a, b) => a + (b.qty * b.currentPrice), 0);
+            state.history.push({
+                id: (type === 'NHAP' ? 'NK' : 'XK') + Date.now().toString().slice(-6),
+                date: document.getElementById('doc-date').value,
+                type, partner, total,
+                items: currentFormItems.map(i => ({name: i.name, qty: i.qty, price: i.currentPrice}))
             });
-            saveState(); closeModal(); renderContent('partners'); showToast("Đã lưu đối tác");
+
+            saveState();
+            showToast("Thành công");
+            switchTab('dashboard');
         }
 
-        // --- SYSTEM ---
-        function updatePassword() {
-            state.systemPass = document.getElementById('new-sys-pass').value;
-            saveState(); showToast("Bảo mật đã cập nhật");
+        // --- Partners ---
+        function renderPartners(area) {
+            area.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-bold text-slate-600">Danh sách đối tác</h3>
+                </div>
+                <div class="card overflow-hidden">
+                    <table class="w-full text-left table-misa">
+                        <thead>
+                            <tr><th>Tên</th><th>Loại</th><th>Số điện thoại</th><th>Hành động</th></tr>
+                        </thead>
+                        <tbody>
+                            ${state.partners.map(p => `
+                                <tr>
+                                    <td class="font-bold">${p.name}</td>
+                                    <td><span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.type==='NCC'?'bg-orange-100 text-orange-700':'bg-emerald-100 text-emerald-700'}">${p.type}</span></td>
+                                    <td>${p.phone || '-'}</td>
+                                    <td><button onclick="deletePartner('${p.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         }
 
-        function exportData() {
+        // --- Settings ---
+        function renderSettings(area) {
+            area.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card p-8">
+                        <h3 class="font-bold text-xl mb-6">Bảo mật</h3>
+                        <div class="space-y-4">
+                            <input type="password" id="new-pass" value="${state.settings.pass}" placeholder="Mật khẩu mới" class="w-full p-3 border rounded-xl outline-none">
+                            <button onclick="updateSettings('pass')" class="btn btn-primary w-full justify-center">Lưu mật khẩu</button>
+                        </div>
+                    </div>
+                    <div class="card p-8">
+                        <h3 class="font-bold text-xl mb-6">Giao diện</h3>
+                        <select id="font-select" class="w-full p-3 border rounded-xl mb-4">
+                            <option value="Inter" ${state.settings.font === 'Inter' ? 'selected' : ''}>Inter (Mặc định)</option>
+                            <option value="'Be Vietnam Pro', sans-serif" ${state.settings.font.includes('Be Vietnam') ? 'selected' : ''}>Be Vietnam Pro</option>
+                            <option value="'Roboto Mono', monospace" ${state.settings.font.includes('Roboto') ? 'selected' : ''}>Roboto Mono</option>
+                        </select>
+                        <button onclick="updateSettings('font')" class="btn btn-primary w-full justify-center">Áp dụng font</button>
+                    </div>
+                    <div class="card p-8 border-dashed border-2 bg-slate-50">
+                        <h3 class="font-bold mb-4">Dữ liệu</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="exportJSON()" class="p-4 bg-white border rounded-xl font-bold flex flex-col items-center gap-2">
+                                <i data-lucide="download" class="text-blue-500"></i> Xuất JSON
+                            </button>
+                            <label class="p-4 bg-white border rounded-xl font-bold flex flex-col items-center gap-2 cursor-pointer">
+                                <i data-lucide="upload" class="text-emerald-500"></i> Nhập JSON
+                                <input type="file" class="hidden" accept=".json" onchange="importJSON(this)">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function updateSettings(type) {
+            if(type === 'pass') state.settings.pass = document.getElementById('new-pass').value;
+            if(type === 'font') {
+                state.settings.font = document.getElementById('font-select').value;
+                document.documentElement.style.setProperty('--font-main', state.settings.font);
+            }
+            saveState();
+            showToast("Đã lưu");
+        }
+
+        function exportJSON() {
             const blob = new Blob([JSON.stringify(state)], {type: 'application/json'});
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-            a.download = `ERP_PRO_BACKUP_${Date.now()}.json`; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
+            a.download = `PT_ERP_${Date.now()}.json`; a.click();
         }
 
-        function importData(input) {
+        function importJSON(input) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                try {
-                    state = JSON.parse(e.target.result);
-                    saveState(); location.reload();
-                } catch(err) { showToast("File không hợp lệ", false); }
+                state = JSON.parse(e.target.result);
+                saveState(); location.reload();
             };
             reader.readAsText(input.files[0]);
         }
 
-        function factoryReset() {
-            if(confirm("BẠN CÓ CHẮC MUỐN XÓA TẤT CẢ DỮ LIỆU?")) { localStorage.removeItem('PT_ERP_PRO_STATE'); location.reload(); }
+        // --- Utils ---
+        function formatVND(v) { return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v); }
+        
+        function multiKeywordFilter(data, q) {
+            if(!q) return data;
+            const parts = q.toLowerCase().split('*').map(p => p.trim());
+            return data.filter(i => parts.every(p => 
+                i.name.toLowerCase().includes(p) || i.id.toLowerCase().includes(p) || i.priceSell.toString().includes(p)
+            ));
         }
 
-        function closeModal() { document.getElementById('modal-container').classList.add('hidden'); }
+        function showToast(m) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = m;
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 2500);
+        }
 
         window.onload = () => {
-            switchTab('inventory');
-            setInterval(() => {
-                document.getElementById('live-clock').innerText = new Date().toLocaleString('vi-VN');
-            }, 1000);
+            if(state.settings.isLocked) lockSystem();
+            document.documentElement.style.setProperty('--font-main', state.settings.font);
+            switchTab('dashboard');
+            setInterval(() => { document.getElementById('live-clock').innerText = new Date().toLocaleString('vi-VN'); }, 1000);
         };
     </script>
 </body>
