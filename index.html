@@ -19,7 +19,7 @@
         .btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .btn-primary { background: #2563eb; color: white; }
         .btn-primary:hover { background: #1d4ed8; }
-        .table-misa th { background: #f1f5f9; color: #475569; font-size: 11px; text-transform: uppercase; padding: 12px; }
+        .table-misa th { background: #f1f5f9; color: #475569; font-size: 11px; text-transform: uppercase; padding: 12px; white-space: nowrap; }
         .table-misa td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
         .modal-overlay { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); }
         .badge-stock { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
@@ -30,7 +30,6 @@
 </head>
 <body class="flex h-screen overflow-hidden">
 
-    <!-- Màn hình khóa -->
     <div id="lock-screen" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center hidden">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
             <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -43,7 +42,16 @@
         </div>
     </div>
 
-    <!-- Sidebar -->
+    <div id="common-modal" class="fixed inset-0 z-[150] modal-overlay flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in">
+            <div class="flex justify-between items-center p-4 border-b bg-slate-50">
+                <h3 id="modal-title" class="font-bold text-lg text-slate-800">Tiêu đề</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-rose-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="modal-content" class="p-6"></div>
+        </div>
+    </div>
+
     <aside id="app-sidebar" class="misa-sidebar flex flex-col shrink-0">
         <div class="p-6 mb-4">
             <div class="flex items-center gap-3">
@@ -69,7 +77,6 @@
         </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="flex-1 flex flex-col min-w-0">
         <header class="h-16 bg-white border-b flex items-center justify-between px-8 shadow-sm">
             <h2 id="tab-title" class="font-bold text-slate-800 text-lg">Tổng quan</h2>
@@ -85,7 +92,6 @@
         <div id="content-area" class="flex-1 overflow-auto p-8 custom-scroll"></div>
     </main>
 
-    <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-8 right-8 z-[200] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
         <div class="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3">
             <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
@@ -101,9 +107,9 @@
             history: [],
             settings: { font: 'Inter', pass: '1234', isLocked: true }
         };
-
         let selectedItems = new Set();
         let searchQuery = "";
+        let editingItemId = null;
 
         const saveState = () => localStorage.setItem('PT_ERP_ENT_STATE', JSON.stringify(state));
 
@@ -129,7 +135,7 @@
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('nav-active'));
             document.getElementById(`nav-${tab}`).classList.add('nav-active');
             document.getElementById('tab-title').innerText = document.getElementById(`nav-${tab}`).innerText;
-            selectedItems.clear(); // Reset selection when switching tabs
+            selectedItems.clear(); 
             renderContent(tab);
         }
 
@@ -145,6 +151,18 @@
                 case 'settings': renderSettings(area); break;
             }
             lucide.createIcons();
+        }
+
+        // --- Modal Logic ---
+        function openModal(title, contentHTML) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerHTML = contentHTML;
+            document.getElementById('common-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeModal() {
+            document.getElementById('common-modal').classList.add('hidden');
         }
 
         // --- Dashboard ---
@@ -165,7 +183,7 @@
                         <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Số mặt hàng</div>
                         <div class="text-2xl font-black">${state.inventory.length} mã</div>
                     </div>
-                    <div class="card p-6 border-t-4 border-orange-500">
+                    <div onclick="showLowStock()" class="card p-6 border-t-4 border-orange-500 cursor-pointer hover:bg-orange-50 transition">
                         <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Cảnh báo tồn kho</div>
                         <div class="text-2xl font-black text-orange-600">${state.inventory.filter(i => i.qty < 5).length}</div>
                     </div>
@@ -192,22 +210,42 @@
             `;
         }
 
+        // Hàm xử lý khi click vào cảnh báo tồn kho
+        function showLowStock() {
+            switchTab('inventory');
+            // Lọc các mặt hàng có số lượng < 5
+            const lowStockItems = state.inventory.filter(i => i.qty < 5);
+            // Cập nhật lại body bảng
+            document.getElementById('inventory-body').innerHTML = renderInventoryRows(lowStockItems);
+            // Xóa ô tìm kiếm nếu có
+            document.getElementById('inventory-search-input').value = "";
+            searchQuery = "";
+            showToast("Đang hiển thị hàng sắp hết");
+            lucide.createIcons();
+        }
+
         // --- Inventory ---
         function renderInventory(area) {
             area.innerHTML = `
-                <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
-                    <div class="flex gap-2">
-                        <label class="btn bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700">
-                            <i data-lucide="file-spreadsheet"></i> Nhập từ Excel
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                    <div class="flex items-center gap-4 w-full md:w-auto">
+                        <h3 class="font-bold text-xl text-slate-700 whitespace-nowrap">Kho hàng</h3>
+                        <div class="relative w-full md:w-80">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="inventory-search-input" value="${searchQuery}" oninput="searchInventory(this.value)" placeholder="Tìm 'tên*mã' hoặc 'ghi chú'..." class="w-full pl-10 pr-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
+                        </div>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto justify-end">
+                        <button onclick="openInventoryModal()" class="btn btn-primary shadow-sm shadow-blue-200">
+                            <i data-lucide="plus-circle"></i> Thêm hàng hóa
+                        </button>
+                        <label class="btn bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700 shadow-sm shadow-emerald-200">
+                            <i data-lucide="file-spreadsheet"></i> Nhập Excel
                             <input type="file" class="hidden" accept=".xlsx, .xls, .csv" onchange="importExcel(this)">
                         </label>
                         <button id="btn-delete-multi" onclick="deleteMultipleItems()" class="btn border border-rose-200 text-rose-500 hover:bg-rose-50 ${selectedItems.size === 0 ? 'opacity-50 pointer-events-none' : ''}">
-                            <i data-lucide="trash-2"></i> Xóa đã chọn (${selectedItems.size})
+                            <i data-lucide="trash-2"></i> Xóa (${selectedItems.size})
                         </button>
-                    </div>
-                    <div class="relative w-full md:w-80">
-                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                        <input type="text" id="inventory-search-input" value="${searchQuery}" oninput="searchInventory(this.value)" placeholder="Tìm 'tên*mã' hoặc 'tên*giá'..." class="w-full pl-10 pr-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                 </div>
                 <div class="card overflow-hidden overflow-x-auto">
@@ -217,6 +255,7 @@
                                 <th class="w-10"><input type="checkbox" id="check-all" onchange="toggleAllItems(this)"></th>
                                 <th>Sản phẩm</th>
                                 <th>Đơn vị</th>
+                                <th>Ghi chú</th>
                                 <th class="text-right">Tồn kho</th>
                                 <th class="text-right">Giá nhập</th>
                                 <th class="text-right">Giá bán</th>
@@ -233,7 +272,7 @@
         }
 
         function renderInventoryRows(items) {
-            if(items.length === 0) return `<tr><td colspan="7" class="text-center py-10 text-slate-400 italic">Không có dữ liệu</td></tr>`;
+            if(items.length === 0) return `<tr><td colspan="8" class="text-center py-10 text-slate-400 italic">Không có dữ liệu</td></tr>`;
             return items.map(item => `
                 <tr class="hover:bg-slate-50 transition">
                     <td><input type="checkbox" class="item-checkbox" onchange="toggleItemSelect('${item.id}', this)" ${selectedItems.has(item.id) ? 'checked' : ''}></td>
@@ -242,14 +281,97 @@
                         <div class="text-[10px] text-blue-500 font-mono uppercase">Mã: ${item.id}</div>
                     </td>
                     <td>${item.unit}</td>
+                    <td class="text-slate-500 italic max-w-[150px] truncate" title="${item.note || ''}">${item.note || '-'}</td>
                     <td class="text-right"><span class="badge-stock ${item.qty < 5 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-700'}">${item.qty}</span></td>
                     <td class="text-right text-slate-500">${formatVND(item.priceBuy)}</td>
                     <td class="text-right font-bold text-blue-600">${formatVND(item.priceSell)}</td>
-                    <td class="text-center">
-                        <button onclick="deleteSingleItem('${item.id}')" class="p-2 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <td class="text-center flex items-center justify-center gap-1">
+                        <button onclick="openInventoryModal('${item.id}')" class="p-2 text-slate-400 hover:text-blue-600 transition" title="Sửa"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                        <button onclick="deleteSingleItem('${item.id}')" class="p-2 text-slate-300 hover:text-rose-500 transition" title="Xóa"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function openInventoryModal(id = null) {
+            editingItemId = id;
+            let item = { name: '', unit: 'Cái', qty: 0, priceBuy: 0, priceSell: 0, note: '' };
+            let title = 'Thêm hàng hóa mới';
+            let btnText = 'Lưu hàng hóa';
+            if (id) {
+                const found = state.inventory.find(i => i.id === id);
+                if (found) {
+                    item = found;
+                    title = 'Cập nhật hàng hóa';
+                    btnText = 'Cập nhật';
+                }
+            }
+
+            const html = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Tên sản phẩm <span class="text-rose-500">*</span></label>
+                        <input type="text" id="item-name" value="${item.name}" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Đơn vị tính</label>
+                            <input type="text" id="item-unit" value="${item.unit}" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                         <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Tồn kho</label>
+                            <input type="number" id="item-qty" value="${item.qty}" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Giá nhập</label>
+                            <input type="number" id="item-priceBuy" value="${item.priceBuy}" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Giá bán</label>
+                            <input type="number" id="item-priceSell" value="${item.priceSell}" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Ghi chú</label>
+                        <textarea id="item-note" rows="2" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Vị trí, đặc điểm...">${item.note || ''}</textarea>
+                    </div>
+                    <button onclick="saveItem()" class="w-full mt-2 bg-blue-600 text-white p-3 rounded-xl font-bold hover:bg-blue-700 transition">${btnText}</button>
+                </div>
+            `;
+            openModal(title, html);
+        }
+
+        function saveItem() {
+            const name = document.getElementById('item-name').value.trim();
+            if(!name) return alert("Vui lòng nhập tên sản phẩm");
+            
+            const itemData = {
+                name: name,
+                unit: document.getElementById('item-unit').value || 'Cái',
+                qty: parseFloat(document.getElementById('item-qty').value) || 0,
+                priceBuy: parseFloat(document.getElementById('item-priceBuy').value) || 0,
+                priceSell: parseFloat(document.getElementById('item-priceSell').value) || 0,
+                note: document.getElementById('item-note').value.trim()
+            };
+            if (editingItemId) {
+                const index = state.inventory.findIndex(i => i.id === editingItemId);
+                if (index !== -1) {
+                    state.inventory[index] = { ...state.inventory[index], ...itemData };
+                    showToast("Đã cập nhật");
+                }
+            } else {
+                const newItem = {
+                    id: 'HH' + Math.floor(1000 + Math.random() * 8999),
+                    ...itemData
+                };
+                state.inventory.push(newItem);
+                showToast("Đã thêm mới");
+            }
+            saveState();
+            closeModal();
+            renderContent('inventory');
         }
 
         function searchInventory(q) {
@@ -269,22 +391,16 @@
         function toggleAllItems(el) {
             const filtered = multiKeywordFilter(state.inventory, searchQuery);
             const checkboxes = document.querySelectorAll('.item-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = el.checked;
-            });
-            
-            if(el.checked) {
-                filtered.forEach(item => selectedItems.add(item.id));
-            } else {
-                filtered.forEach(item => selectedItems.delete(item.id));
-            }
+            checkboxes.forEach(cb => { cb.checked = el.checked; });
+            if(el.checked) { filtered.forEach(item => selectedItems.add(item.id)); } 
+            else { filtered.forEach(item => selectedItems.delete(item.id)); }
             updateDeleteButton();
         }
 
         function updateDeleteButton() {
             const btn = document.getElementById('btn-delete-multi');
             if(!btn) return;
-            btn.innerText = `Xóa đã chọn (${selectedItems.size})`;
+            btn.innerText = `Xóa (${selectedItems.size})`;
             if(selectedItems.size > 0) {
                 btn.classList.remove('opacity-50', 'pointer-events-none');
             } else {
@@ -311,7 +427,6 @@
             }
         }
 
-        // --- Excel ---
         function importExcel(input) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -319,7 +434,6 @@
                 const workbook = XLSX.read(data, {type: 'array'});
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
                 const rows = XLSX.utils.sheet_to_json(sheet);
-                
                 rows.forEach(row => {
                     const name = row['Tên hàng'] || row['Ten hang'] || '';
                     if(!name) return;
@@ -327,14 +441,15 @@
                     const priceSell = parseFloat(row['Giá bán'] || row['Gia ban'] || 0);
                     const unit = row['Đơn vị'] || row['Don vi'] || 'Cái';
                     const qty = parseFloat(row['Số lượng'] || row['So luong'] || 0);
-
+                    const note = row['Ghi chú'] || row['Ghi chu'] || '';
                     const existing = state.inventory.find(i => i.name === name && i.priceBuy === priceBuy);
                     if(existing) {
                         existing.qty += qty;
+                        if(note) existing.note = note; 
                     } else {
                         state.inventory.push({
                             id: 'HH' + Math.floor(1000 + Math.random() * 8999),
-                            name, unit, qty, priceBuy, priceSell
+                            name, unit, qty, priceBuy, priceSell, note
                         });
                     }
                 });
@@ -472,7 +587,6 @@
             const partner = document.getElementById('partner-input').value.trim();
             if(!partner) return alert("Vui lòng nhập tên đối tác");
             if(currentFormItems.length === 0) return alert("Chưa có hàng hóa");
-
             currentFormItems.forEach(fItem => {
                 const invItem = state.inventory.find(i => i.id === fItem.id);
                 if(invItem) {
@@ -480,7 +594,6 @@
                     else invItem.qty -= fItem.qty;
                 }
             });
-
             if(!state.partners.find(p => p.name === partner)) {
                 state.partners.push({id: 'DT'+Date.now().toString().slice(-4), name: partner, type: type === 'NHAP' ? 'NCC' : 'KH'});
             }
@@ -492,22 +605,31 @@
                 type, partner, total,
                 items: currentFormItems.map(i => ({name: i.name, qty: i.qty, price: i.currentPrice}))
             });
-
             saveState();
             showToast("Thành công");
             switchTab('dashboard');
         }
 
-        // --- Partners ---
+        // --- Partners (Updated with Input Form) ---
         function renderPartners(area) {
             area.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="font-bold text-slate-600">Danh sách đối tác</h3>
+                    <button onclick="openPartnerModal()" class="btn btn-primary shadow-sm shadow-blue-200">
+                        <i data-lucide="plus-circle"></i> Thêm đối tác
+                    </button>
                 </div>
-                <div class="card overflow-hidden">
+                <div class="card overflow-hidden overflow-x-auto">
                     <table class="w-full text-left table-misa">
                         <thead>
-                            <tr><th>Tên</th><th>Loại</th><th>Số điện thoại</th><th>Hành động</th></tr>
+                            <tr>
+                                <th>Tên</th>
+                                <th>Loại</th>
+                                <th>Số điện thoại</th>
+                                <th>MST</th>
+                                <th>Địa chỉ</th>
+                                <th>Hành động</th>
+                            </tr>
                         </thead>
                         <tbody>
                             ${state.partners.map(p => `
@@ -515,6 +637,8 @@
                                     <td class="font-bold">${p.name}</td>
                                     <td><span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.type==='NCC'?'bg-orange-100 text-orange-700':'bg-emerald-100 text-emerald-700'}">${p.type}</span></td>
                                     <td>${p.phone || '-'}</td>
+                                    <td>${p.tax || '-'}</td>
+                                    <td class="text-xs max-w-[150px] truncate" title="${p.address || ''}">${p.address || '-'}</td>
                                     <td><button onclick="deletePartner('${p.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
                                 </tr>
                             `).join('')}
@@ -522,6 +646,69 @@
                     </table>
                 </div>
             `;
+            lucide.createIcons();
+        }
+
+        function openPartnerModal() {
+            const html = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Tên đối tác <span class="text-rose-500">*</span></label>
+                        <input type="text" id="new-partner-name" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Số điện thoại</label>
+                            <input type="text" id="new-partner-phone" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Mã số thuế</label>
+                            <input type="text" id="new-partner-tax" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Địa chỉ</label>
+                        <input type="text" id="new-partner-address" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Loại đối tác</label>
+                        <select id="new-partner-type" class="w-full p-2 border rounded-lg text-sm outline-none">
+                            <option value="KH">Khách hàng</option>
+                            <option value="NCC">Nhà cung cấp</option>
+                        </select>
+                    </div>
+                    <button onclick="savePartner()" class="w-full mt-2 bg-blue-600 text-white p-3 rounded-xl font-bold hover:bg-blue-700 transition">Lưu đối tác</button>
+                </div>
+            `;
+            openModal('Thêm đối tác mới', html);
+        }
+
+        function savePartner() {
+            const name = document.getElementById('new-partner-name').value.trim();
+            if(!name) return alert("Vui lòng nhập tên đối tác");
+            
+            const newPartner = {
+                id: 'DT' + Date.now().toString().slice(-4),
+                name: name,
+                phone: document.getElementById('new-partner-phone').value.trim(),
+                tax: document.getElementById('new-partner-tax').value.trim(),
+                address: document.getElementById('new-partner-address').value.trim(),
+                type: document.getElementById('new-partner-type').value
+            };
+
+            state.partners.push(newPartner);
+            saveState();
+            closeModal();
+            renderContent('partners');
+            showToast("Đã thêm đối tác");
+        }
+        
+        function deletePartner(id) {
+            if(confirm('Xóa đối tác này?')) {
+                state.partners = state.partners.filter(p => p.id !== id);
+                saveState();
+                renderContent('partners');
+            }
         }
 
         // --- Settings ---
@@ -593,7 +780,7 @@
             if(!q) return data;
             const parts = q.toLowerCase().split('*').map(p => p.trim());
             return data.filter(i => parts.every(p => 
-                i.name.toLowerCase().includes(p) || i.id.toLowerCase().includes(p) || i.priceSell.toString().includes(p)
+                i.name.toLowerCase().includes(p) || i.id.toLowerCase().includes(p) || i.priceSell.toString().includes(p) || (i.note && i.note.toLowerCase().includes(p))
             ));
         }
 
