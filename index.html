@@ -3,666 +3,570 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PT ERP - Enterprise Fixed</title>
+    <title>PT ERP - V8.2 (Excel Import & Smart Filter)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono&family=Be+Vietnam+Pro:wght@300;400;700&display=swap');
-        :root { --font-main: 'Inter', sans-serif; }
-        body { font-family: var(--font-main); background-color: #f8fafc; color: #1e293b; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
         .misa-sidebar { width: 260px; background: #0f172a; color: #94a3b8; }
         .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; cursor: pointer; border-left: 4px solid transparent; transition: 0.2s; }
         .nav-item:hover { background: #1e293b; color: white; }
-        .nav-item.active { background: #1e293b; color: #6366f1; border-left-color: #6366f1; }
-        .misa-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .nav-active { background: #1e293b; color: white; border-left-color: #3b82f6; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        .btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-primary { background: #2563eb; color: white; }
+        .table-misa th { background: #f1f5f9; color: #475569; font-size: 11px; text-transform: uppercase; padding: 12px; }
+        .table-misa td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .modal-overlay { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .btn-primary { background: #6366f1; color: white; padding: 8px 16px; border-radius: 8px; font-weight: 600; transition: 0.2s; }
-        .btn-primary:hover { background: #4f46e5; }
-        .btn-outline { border: 1px solid #e2e8f0; padding: 8px 16px; border-radius: 8px; font-weight: 600; transition: 0.2s; background: white; }
-        .btn-outline:hover { background: #f8fafc; }
-        .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        
-        /* Search Styles */
-        .search-results-box { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; z-index: 100; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); max-height: 250px; overflow-y: auto; }
-        .search-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
-        .search-item:hover { background: #f8fafc; }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden">
 
-    <!-- Sidebar -->
-    <aside class="misa-sidebar flex flex-col shrink-0">
-        <div class="p-6 flex items-center gap-3">
-            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg"><i data-lucide="layers"></i></div>
-            <div>
-                <h1 class="font-bold text-white text-lg leading-none">PT ERP</h1>
-                <span class="text-[10px] uppercase tracking-widest text-indigo-400 font-bold">Enterprise V5.1</span>
-            </div>
+    <div id="lock-screen" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+            <h2 class="text-2xl font-bold mb-6">Hệ thống đang khóa</h2>
+            <input type="password" id="unlock-pass" onkeydown="if(event.key === 'Enter') checkUnlock()" placeholder="Mật khẩu (1234)" class="w-full p-4 border rounded-xl mb-4 text-center text-xl outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="checkUnlock()" class="w-full bg-blue-600 text-white p-4 rounded-xl font-bold">Mở khóa</button>
         </div>
+    </div>
 
-        <nav class="flex-1 mt-4 overflow-y-auto custom-scroll">
-            <div class="px-6 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chính</div>
-            <div class="nav-item" id="nav-dashboard" onclick="switchTab('dashboard')"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> Tổng quan</div>
-            <div class="nav-item" id="nav-inventory" onclick="switchTab('inventory')"><i data-lucide="package" class="w-5 h-5"></i> Kho hàng</div>
-            
-            <div class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nghiệp vụ</div>
-            <div class="nav-item" id="nav-purchasing" onclick="switchTab('purchasing')"><i data-lucide="shopping-cart" class="w-5 h-5"></i> Nhập hàng</div>
-            <div class="nav-item" id="nav-sales" onclick="switchTab('sales')"><i data-lucide="banknote" class="w-5 h-5"></i> Bán hàng</div>
-            <div class="nav-item" id="nav-partners" onclick="switchTab('partners')"><i data-lucide="users" class="w-5 h-5"></i> Đối tác</div>
-            
-            <div class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hệ thống</div>
-            <div class="nav-item" id="nav-settings" onclick="switchTab('settings')"><i data-lucide="settings" class="w-5 h-5"></i> Cấu hình</div>
+    <div id="common-modal" class="fixed inset-0 z-[150] modal-overlay flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b bg-slate-50">
+                <h3 id="modal-title" class="font-bold text-lg text-slate-800 uppercase"></h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-rose-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="modal-content" class="p-6 overflow-auto custom-scroll"></div>
+        </div>
+    </div>
+
+    <aside class="misa-sidebar flex flex-col shrink-0">
+        <div class="p-6 mb-4 font-bold text-xl text-white border-b border-slate-800">PT ERP PRO</div>
+        <nav class="flex-1 space-y-1 mt-4">
+            <div onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item"><i data-lucide="layout-grid" class="w-5 h-5"></i> Tổng quan</div>
+            <div onclick="switchTab('inventory')" id="nav-inventory" class="nav-item"><i data-lucide="package" class="w-5 h-5"></i> Kho hàng</div>
+            <div onclick="switchTab('import')" id="nav-import" class="nav-item"><i data-lucide="log-in" class="w-5 h-5"></i> Nhập kho</div>
+            <div onclick="switchTab('sale')" id="nav-sale" class="nav-item"><i data-lucide="shopping-bag" class="w-5 h-5"></i> Xuất kho</div>
+            <div onclick="switchTab('partners')" id="nav-partners" class="nav-item"><i data-lucide="users" class="w-5 h-5"></i> Đối tác</div>
+            <div onclick="switchTab('settings')" id="nav-settings" class="nav-item"><i data-lucide="settings-2" class="w-5 h-5"></i> Cài đặt</div>
         </nav>
-
         <div class="p-6 border-t border-slate-800">
-            <div id="live-clock" class="text-xs font-mono text-slate-500"></div>
+            <button onclick="lockSystem()" class="text-xs text-rose-500 hover:text-white flex items-center gap-2">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Khóa hệ thống
+            </button>
         </div>
     </aside>
 
     <main class="flex-1 flex flex-col min-w-0">
-        <header class="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0">
-            <h2 id="tab-title" class="font-bold text-slate-800 text-lg uppercase tracking-tight">Tổng quan</h2>
-            <div class="flex items-center gap-4">
-                <div class="text-right">
-                    <div class="text-xs font-bold text-slate-800" id="header-company">PT GROUP</div>
-                </div>
-                <div class="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-xl flex items-center justify-center font-bold">AD</div>
-            </div>
+        <header class="h-16 bg-white border-b flex items-center justify-between px-8 shadow-sm">
+            <h2 id="tab-title" class="font-bold text-slate-800 text-lg uppercase">Tổng quan</h2>
+            <div id="live-clock" class="text-sm font-mono text-slate-500"></div>
         </header>
-
-        <div id="content-area" class="flex-1 overflow-y-auto p-8 custom-scroll"></div>
+        <div id="content-area" class="flex-1 overflow-auto p-8 custom-scroll"></div>
     </main>
 
-    <div id="modal-container" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden"></div>
-    <div id="toast" class="fixed bottom-8 right-8 z-[100] transform translate-y-20 opacity-0 transition-all duration-300">
-        <div class="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-            <span id="toast-msg" class="text-sm font-bold"></span>
+    <div id="toast" class="fixed bottom-8 right-8 z-[200] transform translate-y-20 opacity-0 transition-all duration-300">
+        <div class="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3">
+            <i data-lucide="check-circle" class="w-5 h-5 text-blue-400"></i>
+            <span id="toast-msg" class="text-sm">Thông báo</span>
         </div>
     </div>
 
     <script>
-        // --- State Management ---
-        let state = JSON.parse(localStorage.getItem('PT_ERP_DB')) || {
+        // --- QUẢN LÝ DỮ LIỆU ---
+        let state = JSON.parse(localStorage.getItem('PT_ERP_ENT_STATE')) || {
             inventory: [],
-            purchases: [],
-            sales: [],
             partners: [],
-            settings: { companyName: "PT GROUP", font: "'Inter', sans-serif", deleteKey: "1234" }
+            history: [],
+            settings: { pass: '1234', isLocked: true }
         };
+        let editingItemId = null;
+        let editingPartnerId = null;
 
-        // Hàm sửa lỗi ID cũ: Tự động cập nhật ID nếu phát hiện ID ngắn/dễ trùng
-        function migrateIDs() {
-            let fixed = 0;
-            state.inventory.forEach((item, index) => {
-                if (!item.id || item.id.length < 8) { 
-                    item.id = 'SP-' + Date.now() + '-' + index;
-                    fixed++;
-                }
-            });
-            if(fixed > 0) {
-                console.log(`Đã tự động sửa lỗi ${fixed} mã hàng hóa trùng lặp.`);
+        const saveState = () => localStorage.setItem('PT_ERP_ENT_STATE', JSON.stringify(state));
+
+        // --- BẢO MẬT ---
+        function checkUnlock() {
+            if(document.getElementById('unlock-pass').value === state.settings.pass) {
+                state.settings.isLocked = false;
+                document.getElementById('lock-screen').classList.add('hidden');
+                document.getElementById('unlock-pass').value = '';
                 saveState();
+            } else { alert("Sai mật khẩu!"); }
+        }
+        function lockSystem() {
+            state.settings.isLocked = true;
+            document.getElementById('lock-screen').classList.remove('hidden');
+            saveState();
+        }
+
+        // --- ĐIỀU HƯỚNG ---
+        function switchTab(tab, filter = null) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('nav-active'));
+            document.getElementById(`nav-${tab}`).classList.add('nav-active');
+            document.getElementById('tab-title').innerText = document.getElementById(`nav-${tab}`).innerText;
+            renderContent(tab, filter);
+        }
+
+        function renderContent(tab, filter) {
+            const area = document.getElementById('content-area');
+            area.innerHTML = '';
+            if(tab === 'dashboard') renderDashboard(area);
+            else if(tab === 'inventory') renderInventory(area, filter);
+            else if(tab === 'import') renderDocForm(area, 'NHAP');
+            else if(tab === 'sale') renderDocForm(area, 'XUAT');
+            else if(tab === 'partners') renderPartners(area);
+            else if(tab === 'settings') renderSettings(area);
+            lucide.createIcons();
+        }
+
+        // --- TỔNG QUAN ---
+        function renderDashboard(area) {
+            const totalStockCount = state.inventory.filter(i => i.qty > 0).length; // Đếm số mã còn hàng
+            const lowStock = state.inventory.filter(i => i.qty < 5).length;
+            const revenue = state.history.filter(h => h.type === 'XUAT').reduce((a, b) => a + b.total, 0);
+
+            area.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="card p-6 border-t-4 border-blue-500">
+                        <div class="text-xs font-bold text-slate-400 mb-1 uppercase">Doanh thu bán</div>
+                        <div class="text-2xl font-black">${formatVND(revenue)}</div>
+                    </div>
+                    <div onclick="switchTab('inventory', 'low')" class="card p-6 border-t-4 border-orange-500 cursor-pointer hover:bg-orange-50 transition">
+                        <div class="text-xs font-bold text-slate-400 mb-1 uppercase">Sắp hết hàng</div>
+                        <div class="text-2xl font-black text-orange-600">${lowStock} mã hàng</div>
+                    </div>
+                    <div onclick="switchTab('inventory', 'instock')" class="card p-6 border-t-4 border-emerald-500 cursor-pointer hover:bg-emerald-50 transition">
+                        <div class="text-xs font-bold text-slate-400 mb-1 uppercase">Hàng còn tồn kho</div>
+                        <div class="text-2xl font-black text-emerald-600">${totalStockCount} mã hàng</div>
+                        <div class="text-[10px] text-slate-400 mt-2 italic font-medium">Bấm để xem danh sách còn hàng →</div>
+                    </div>
+                </div>
+                <div class="card p-6">
+                    <h3 class="font-bold mb-4 uppercase text-slate-700">Lịch sử giao dịch gần đây</h3>
+                    <table class="w-full text-left table-misa">
+                        <thead><tr><th>Số CT</th><th>Loại</th><th>Đối tác</th><th>Giá trị</th></tr></thead>
+                        <tbody>
+                            ${state.history.slice(-5).reverse().map(h => `
+                                <tr>
+                                    <td class="font-mono font-bold text-blue-600">${h.id}</td>
+                                    <td>${h.type === 'NHAP' ? 'Nhập kho' : 'Bán hàng'}</td>
+                                    <td>${h.partner}</td>
+                                    <td class="font-bold">${formatVND(h.total)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // --- KHO HÀNG ---
+        function renderInventory(area, filter) {
+            let items = state.inventory;
+            let label = "Tất cả hàng hóa";
+            if(filter === 'low') { items = state.inventory.filter(i => i.qty < 5); label = "Lọc: Sắp hết hàng"; }
+            if(filter === 'instock') { items = state.inventory.filter(i => i.qty > 0); label = "Lọc: Hàng còn tồn"; }
+
+            area.innerHTML = `
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                    <div class="flex gap-4 items-center">
+                        <input type="text" id="inv-search" oninput="searchInv(this.value)" placeholder="Tìm tên hoặc mã..." class="p-2 border rounded-lg w-64 outline-none focus:ring-2 focus:ring-blue-400">
+                        <span class="text-xs font-bold px-2 py-1 bg-slate-200 rounded text-slate-600">${label}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <label class="btn border border-emerald-500 text-emerald-600 cursor-pointer hover:bg-emerald-50">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Nhập từ Excel
+                            <input type="file" id="excel-input" class="hidden" accept=".xlsx, .xls" onchange="importExcel(this)">
+                        </label>
+                        <button onclick="openInvModal()" class="btn btn-primary"><i data-lucide="plus"></i> Thêm thủ công</button>
+                    </div>
+                </div>
+                <div class="card overflow-hidden">
+                    <table class="w-full text-left table-misa">
+                        <thead>
+                            <tr><th>Sản phẩm / ID</th><th>Ghi chú</th><th class="text-right">Tồn kho</th><th class="text-right">Giá bán</th><th class="text-center">Thao tác</th></tr>
+                        </thead>
+                        <tbody id="inventory-body">${renderInvRows(items)}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderInvRows(items) {
+            if(items.length === 0) return `<tr><td colspan="5" class="text-center p-10 text-slate-400 italic">Trống</td></tr>`;
+            return items.map(item => `
+                <tr>
+                    <td>
+                        <div class="font-bold text-slate-800">${item.name}</div>
+                        <div class="text-[10px] text-blue-500 font-mono">ID: ${item.id}</div>
+                    </td>
+                    <td class="text-slate-500 italic text-xs">${item.note || '-'}</td>
+                    <td class="text-right font-bold ${item.qty < 5 ? 'text-rose-500' : ''}">${item.qty} ${item.unit}</td>
+                    <td class="text-right">${formatVND(item.priceSell)}</td>
+                    <td class="text-center">
+                        <button onclick="openInvModal('${item.id}')" class="text-blue-500 mr-3"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                        <button onclick="deleteItem('${item.id}')" class="text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // HÀM XỬ LÝ NHẬP EXCEL
+        function importExcel(input) {
+            const file = input.files[0];
+            if(!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                if(json.length === 0) return alert("File Excel trống!");
+
+                json.forEach(row => {
+                    // Map các cột từ Excel (bạn có thể đổi tên cột ở đây cho khớp file của bạn)
+                    const newItem = {
+                        name: row["Tên"] || row["Sản phẩm"] || "Chưa đặt tên",
+                        unit: row["Đơn vị"] || row["ĐVT"] || "Cái",
+                        qty: parseFloat(row["Số lượng"] || row["Tồn kho"]) || 0,
+                        priceBuy: parseFloat(row["Giá nhập"]) || 0,
+                        priceSell: parseFloat(row["Giá bán"]) || 0,
+                        note: row["Ghi chú"] || ""
+                    };
+
+                    // Sinh ID duy nhất
+                    const timestamp = Math.floor(Date.now() / 1000);
+                    const randomPart = Math.floor(Math.random() * 99) + 10;
+                    newItem.id = `SP-${timestamp}-${randomPart}`;
+
+                    state.inventory.push(newItem);
+                });
+
+                saveState();
+                renderContent('inventory');
+                showToast(`Đã nhập thành công ${json.length} mặt hàng!`);
+                input.value = ""; // Reset input
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function searchInv(q) {
+            const f = state.inventory.filter(i => i.name.toLowerCase().includes(q.toLowerCase()) || i.id.toLowerCase().includes(q.toLowerCase()));
+            document.getElementById('inventory-body').innerHTML = renderInvRows(f);
+            lucide.createIcons();
+        }
+
+        function openInvModal(id = null) {
+            editingItemId = id;
+            let item = { name: '', unit: 'Cái', qty: 0, priceBuy: 0, priceSell: 0, note: '' };
+            if(id) item = state.inventory.find(i => i.id === id);
+
+            openModal(id ? 'Cập nhật hàng hóa' : 'Thêm hàng hóa mới', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Tên sản phẩm</label>
+                        <input type="text" id="m-name" value="${item.name}" class="w-full p-2 border rounded-lg outline-none focus:ring-1 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">ĐVT</label>
+                            <input type="text" id="m-unit" value="${item.unit}" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Tồn kho</label>
+                            <input type="number" id="m-qty" value="${item.qty}" class="w-full p-2 border rounded-lg">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Giá nhập</label>
+                            <input type="number" id="m-buy" value="${item.priceBuy}" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Giá bán</label>
+                            <input type="number" id="m-sell" value="${item.priceSell}" class="w-full p-2 border rounded-lg">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Ghi chú</label>
+                        <textarea id="m-note" class="w-full p-2 border rounded-lg h-20">${item.note || ''}</textarea>
+                    </div>
+                    <button onclick="saveInvItem()" class="w-full bg-blue-600 text-white p-3 rounded-xl font-bold uppercase shadow-lg hover:bg-blue-700 transition">Lưu dữ liệu</button>
+                </div>
+            `);
+        }
+
+        function saveInvItem() {
+            const data = {
+                name: document.getElementById('m-name').value,
+                unit: document.getElementById('m-unit').value || 'Cái',
+                qty: parseFloat(document.getElementById('m-qty').value) || 0,
+                priceBuy: parseFloat(document.getElementById('m-buy').value) || 0,
+                priceSell: parseFloat(document.getElementById('m-sell').value) || 0,
+                note: document.getElementById('m-note').value
+            };
+
+            if(editingItemId) {
+                const idx = state.inventory.findIndex(i => i.id === editingItemId);
+                if(idx !== -1) {
+                    state.inventory[idx] = { ...state.inventory[idx], ...data };
+                }
+            } else {
+                const timestamp = Math.floor(Date.now() / 1000);
+                const randomPart = Math.floor(Math.random() * 99) + 10;
+                const newId = `SP-${timestamp}-${randomPart}`;
+                state.inventory.push({ id: newId, ...data });
+            }
+            saveState(); closeModal(); renderContent('inventory');
+            showToast("Đã lưu hàng hóa!");
+        }
+
+        function deleteItem(id) {
+            if(confirm("Xóa vĩnh viễn sản phẩm này?")) {
+                state.inventory = state.inventory.filter(i => i.id !== id);
+                saveState(); renderContent('inventory');
             }
         }
-        migrateIDs();
 
-        let currentTab = 'dashboard';
-        let selectedItems = new Set();
-        let tempSelected = new Set();
+        // --- ĐỐI TÁC ---
+        function renderPartners(area) {
+            area.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-bold text-lg text-slate-800">DANH SÁCH ĐỐI TÁC</h3>
+                    <button onclick="openPartnerModal()" class="btn btn-primary"><i data-lucide="plus"></i> Thêm đối tác</button>
+                </div>
+                <div class="card overflow-hidden">
+                    <table class="w-full text-left table-misa">
+                        <thead><tr><th>Tên đối tác</th><th>SĐT</th><th>Loại</th><th class="text-center">Thao tác</th></tr></thead>
+                        <tbody>
+                            ${state.partners.map(p => `
+                                <tr>
+                                    <td class="font-bold">${p.name}</td>
+                                    <td>${p.phone || '-'}</td>
+                                    <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${p.type==='NCC'?'bg-orange-100 text-orange-600':'bg-green-100 text-green-600'}">${p.type==='NCC'?'NCC':'KHÁCH'}</span></td>
+                                    <td class="text-center">
+                                        <button onclick="openPartnerModal('${p.id}')" class="text-blue-500 mr-3"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                        <button onclick="deletePartner('${p.id}')" class="text-rose-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
 
-        function saveState() { localStorage.setItem('PT_ERP_DB', JSON.stringify(state)); }
-        const formatVND = (v) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+        function openPartnerModal(id = null) {
+            editingPartnerId = id;
+            let p = { name: '', phone: '', type: 'KH' };
+            if(id) p = state.partners.find(x => x.id === id);
+
+            openModal(id ? 'Sửa đối tác' : 'Thêm đối tác', `
+                <div class="space-y-4">
+                    <input type="text" id="p-name" value="${p.name}" placeholder="Tên đơn vị/cá nhân" class="w-full p-2 border rounded-lg">
+                    <input type="text" id="p-phone" value="${p.phone}" placeholder="Số điện thoại" class="w-full p-2 border rounded-lg">
+                    <select id="p-type" class="w-full p-2 border rounded-lg bg-white">
+                        <option value="KH" ${p.type==='KH'?'selected':''}>Khách hàng</option>
+                        <option value="NCC" ${p.type==='NCC'?'selected':''}>Nhà cung cấp</option>
+                    </select>
+                    <button onclick="savePartner()" class="w-full bg-blue-600 text-white p-3 rounded-xl font-bold uppercase shadow-lg">Lưu đối tác</button>
+                </div>
+            `);
+        }
+
+        function savePartner() {
+            const data = {
+                name: document.getElementById('p-name').value,
+                phone: document.getElementById('p-phone').value,
+                type: document.getElementById('p-type').value
+            };
+            if(editingPartnerId) {
+                const idx = state.partners.findIndex(x => x.id === editingPartnerId);
+                state.partners[idx] = { ...state.partners[idx], ...data };
+            } else {
+                state.partners.push({ id: 'DT-' + Date.now(), ...data });
+            }
+            saveState(); closeModal(); renderContent('partners');
+        }
+
+        function deletePartner(id) {
+            if(confirm("Xóa đối tác này?")) {
+                state.partners = state.partners.filter(p => p.id !== id);
+                saveState(); renderContent('partners');
+            }
+        }
+
+        // --- NHẬP / XUẤT ---
+        let docItems = [];
+        function renderDocForm(area, type) {
+            docItems = [];
+            area.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-2 space-y-4">
+                        <div class="card p-4">
+                            <input type="text" oninput="searchDocItem(this.value, '${type}')" placeholder="Gõ tên hoặc mã SP để tìm..." class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                            <div id="doc-results" class="mt-2 space-y-1"></div>
+                        </div>
+                        <div class="card overflow-hidden">
+                            <table class="w-full text-left table-misa">
+                                <thead><tr><th>Tên hàng</th><th class="w-24">Số lượng</th><th>Thành tiền</th><th></th></tr></thead>
+                                <tbody id="doc-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card p-6 h-fit">
+                        <h3 class="font-bold mb-4 uppercase border-b pb-2">${type==='NHAP'?'Chứng từ nhập kho':'Chứng từ xuất kho'}</h3>
+                        <div class="mb-4">
+                            <label class="text-[10px] font-bold text-slate-400 block mb-1">ĐỐI TÁC</label>
+                            <input type="text" id="doc-partner" list="partner-list" placeholder="Chọn hoặc nhập tên..." class="w-full p-2 border rounded-lg outline-none focus:ring-1 focus:ring-blue-500">
+                            <datalist id="partner-list">${state.partners.map(p => `<option value="${p.name}">`).join('')}</datalist>
+                        </div>
+                        <div class="text-xl font-bold flex justify-between mb-6 pt-4 border-t">
+                            <span>TỔNG CỘNG:</span>
+                            <span id="doc-total" class="text-blue-600">0đ</span>
+                        </div>
+                        <button onclick="submitDoc('${type}')" class="w-full bg-slate-900 text-white p-4 rounded-xl font-bold uppercase shadow-lg">Xác nhận chứng từ</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function searchDocItem(q, type) {
+            const res = document.getElementById('doc-results');
+            if(!q) { res.innerHTML = ''; return; }
+            const filtered = state.inventory.filter(i => i.name.toLowerCase().includes(q.toLowerCase()) || i.id.toLowerCase().includes(q.toLowerCase()));
+            res.innerHTML = filtered.slice(0,5).map(i => `
+                <div onclick="addDocItem('${i.id}', '${type}')" class="p-3 hover:bg-blue-50 cursor-pointer border rounded flex justify-between items-center bg-white shadow-sm">
+                    <div>
+                        <div class="font-bold text-sm">${i.name}</div>
+                        <div class="text-[10px] text-blue-500 font-mono tracking-tighter">${i.id} - Tồn: ${i.qty}</div>
+                    </div>
+                    <span class="font-bold text-slate-700">${formatVND(type==='NHAP'?i.priceBuy:i.priceSell)}</span>
+                </div>
+            `).join('');
+        }
+
+        function addDocItem(id, type) {
+            const item = state.inventory.find(i => i.id === id);
+            if(!item) return;
+            const existing = docItems.find(x => x.id === id);
+            if(existing) { existing.q += 1; } 
+            else { docItems.push({ id: item.id, name: item.name, q: 1, p: type==='NHAP'?item.priceBuy:item.priceSell }); }
+            updateDocTable();
+            document.getElementById('doc-results').innerHTML = '';
+        }
+
+        function updateDocTable() {
+            const body = document.getElementById('doc-body');
+            body.innerHTML = docItems.map((item, idx) => `
+                <tr>
+                    <td>
+                        <div class="font-bold text-xs">${item.name}</div>
+                        <div class="text-[9px] text-slate-400 font-mono">${item.id}</div>
+                    </td>
+                    <td><input type="number" value="${item.q}" oninput="docItems[${idx}].q=parseFloat(this.value)||0;updateDocTable()" class="w-full border rounded text-center text-sm p-1 font-bold outline-blue-400"></td>
+                    <td class="text-right font-bold text-sm text-slate-700">${formatVND(item.q * item.p)}</td>
+                    <td class="text-right"><button onclick="docItems.splice(${idx},1);updateDocTable()" class="text-rose-400 hover:text-rose-600"><i data-lucide="trash" class="w-4 h-4"></i></button></td>
+                </tr>
+            `).join('');
+            const total = docItems.reduce((a, b) => a + (b.q * b.p), 0);
+            document.getElementById('doc-total').innerText = formatVND(total);
+            lucide.createIcons();
+        }
+
+        function submitDoc(type) {
+            const partner = document.getElementById('doc-partner').value;
+            if(!partner || docItems.length === 0) return alert("Vui lòng nhập đủ thông tin!");
+            
+            docItems.forEach(di => {
+                const inv = state.inventory.find(i => i.id === di.id);
+                if(inv) {
+                    if(type === 'NHAP') inv.qty += di.q;
+                    else inv.qty -= di.q;
+                }
+            });
+
+            const docId = (type==='NHAP'?'NK-':'XK-') + Date.now().toString().slice(-6);
+            state.history.push({ id: docId, type, partner, total: docItems.reduce((a,b)=>a+(b.q*b.p), 0), date: new Date().toISOString() });
+            saveState(); showToast(`Đã lập chứng từ ${docId}!`); switchTab('dashboard');
+        }
+
+        // --- CÀI ĐẶT & SAO LƯU ---
+        function renderSettings(area) {
+            area.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card p-6">
+                        <h3 class="font-bold mb-4 uppercase">Mật khẩu hệ thống</h3>
+                        <input type="password" id="set-pass" value="${state.settings.pass}" class="w-full p-2 border rounded-lg mb-4">
+                        <button onclick="state.settings.pass=document.getElementById('set-pass').value;saveState();showToast('Đã đổi mật khẩu')" class="btn btn-primary w-full justify-center uppercase">Lưu mật khẩu mới</button>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="font-bold mb-4 uppercase">Dữ liệu JSON</h3>
+                        <div class="space-y-4">
+                            <button onclick="exportJSON()" class="w-full btn border border-blue-500 text-blue-600 justify-center hover:bg-blue-50 uppercase">
+                                <i data-lucide="download" class="w-4 h-4"></i> Xuất file PT_ERP_DATA.json
+                            </button>
+                            <label class="w-full btn border border-orange-500 text-orange-600 justify-center cursor-pointer hover:bg-orange-50 uppercase">
+                                <i data-lucide="upload" class="w-4 h-4"></i> Nhập dữ liệu từ file
+                                <input type="file" class="hidden" onchange="importJSON(this)">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function exportJSON() {
+            const blob = new Blob([JSON.stringify(state)], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `PT_ERP_DATA.json`;
+            a.click();
+        }
+
+        function importJSON(input) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if(confirm("Ghi đè toàn bộ dữ liệu hiện tại?")) {
+                        state = data; saveState(); location.reload();
+                    }
+                } catch(err) { alert("File không hợp lệ!"); }
+            };
+            reader.readAsText(input.files[0]);
+        }
+
+        // --- HỖ TRỢ ---
+        function formatVND(v) { return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v); }
+        function openModal(title, html) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerHTML = html;
+            document.getElementById('common-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeModal() { 
+            document.getElementById('common-modal').classList.add('hidden'); 
+            editingItemId = null; editingPartnerId = null;
+        }
         function showToast(m) {
             const t = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = m;
             t.classList.remove('translate-y-20', 'opacity-0');
             setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 2500);
         }
-        function closeModal() { document.getElementById('modal-container').classList.add('hidden'); }
-
-        function checkDeleteKey() {
-            const input = prompt("Vui lòng nhập mật khẩu để thực hiện thao tác xóa:");
-            return input === state.settings.deleteKey;
-        }
-
-        // --- Navigation ---
-        function switchTab(tabId) {
-            currentTab = tabId;
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(`nav-${tabId}`)?.classList.add('active');
-            renderContent(tabId);
-            lucide.createIcons();
-        }
-
-        function renderContent(tabId) {
-            const container = document.getElementById('content-area');
-            const titles = { dashboard: "Tổng quan", inventory: "Kho hàng", purchasing: "Nhập hàng", sales: "Bán hàng", partners: "Đối tác", settings: "Cấu hình" };
-            document.getElementById('tab-title').innerText = titles[tabId];
-
-            if(tabId === 'dashboard') {
-                const totalVal = state.inventory.reduce((a,c) => a+(c.qty*c.priceBuy), 0);
-                container.innerHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <div class="misa-card p-6"><div class="text-[10px] font-bold text-slate-400 uppercase">Mặt hàng</div><div class="text-2xl font-black">${state.inventory.length}</div></div>
-                        <div class="misa-card p-6"><div class="text-[10px] font-bold text-slate-400 uppercase">Tồn kho</div><div class="text-2xl font-black">${state.inventory.reduce((a,c)=>a+c.qty,0)}</div></div>
-                        <div class="misa-card p-6"><div class="text-[10px] font-bold text-slate-400 uppercase">Giá trị kho</div><div class="text-2xl font-black text-indigo-600">${formatVND(totalVal)}</div></div>
-                        <div class="misa-card p-6"><div class="text-[10px] font-bold text-slate-400 uppercase">Đối tác</div><div class="text-2xl font-black">${state.partners.length}</div></div>
-                    </div>
-                    <div class="flex gap-4">
-                        <button onclick="exportFullReport()" class="btn-primary flex items-center gap-2"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Xuất báo cáo tổng hợp</button>
-                    </div>
-                `;
-            } else if(tabId === 'inventory') {
-                container.innerHTML = `
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-4 w-1/2">
-                            <input oninput="searchInv(this.value)" type="text" placeholder="Tìm tên hoặc mã (* lọc nhiều cụm)..." class="w-full p-2 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                            ${selectedItems.size > 0 ? `<button onclick="deleteMultipleItems()" class="btn-outline text-red-500 text-xs shrink-0 flex items-center gap-1"><i data-lucide="trash-2" class="w-3 h-3"></i> Xóa (${selectedItems.size})</button>` : ''}
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="downloadTemplate()" class="btn-outline text-xs">Tải mẫu Excel</button>
-                            <label class="btn-outline text-xs cursor-pointer flex items-center gap-1"><i data-lucide="upload" class="w-3 h-3"></i> Nhập Excel<input type="file" class="hidden" onchange="importExcel(this)"></label>
-                            <button onclick="openItemModal()" class="btn-primary text-xs">+ Thêm mới</button>
-                        </div>
-                    </div>
-                    <div id="inv-table-container" class="misa-card overflow-hidden">
-                        ${renderInvTable(state.inventory)}
-                    </div>
-                `;
-            } else if(tabId === 'purchasing' || tabId === 'sales') {
-                const list = tabId === 'purchasing' ? state.purchases : state.sales;
-                container.innerHTML = `
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex gap-4">
-                            <button onclick="downloadTemplate('${tabId}')" class="btn-outline text-xs flex items-center gap-2"><i data-lucide="file-down" class="w-4 h-4"></i> Mẫu Excel</button>
-                            <label class="btn-outline text-xs cursor-pointer flex items-center gap-2"><i data-lucide="upload" class="w-4 h-4"></i> Nạp Excel<input type="file" accept=".xlsx,.xls" class="hidden" onchange="importTxTemplate(this, '${tabId}')"></label>
-                            <button onclick="exportTxExcel('${tabId}')" class="btn-outline text-xs flex items-center gap-2 text-green-600"><i data-lucide="download" class="w-4 h-4"></i> Xuất Excel</button>
-                        </div>
-                        <button onclick="openTxModal('${tabId}')" class="btn-primary text-xs">+ Tạo phiếu ${tabId==='purchasing'?'Nhập':'Bán'}</button>
-                    </div>
-                    <div class="misa-card overflow-hidden">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 border-b"><tr class="text-[10px] font-bold text-slate-400">
-                                <th class="p-4">MÃ PHIẾU</th><th class="p-4">NGÀY</th><th class="p-4">ĐỐI TÁC</th><th class="p-4 text-right">GIÁ TRỊ</th><th class="p-4"></th>
-                            </tr></thead>
-                            <tbody>${list.map(t => `<tr class="border-b hover:bg-slate-50"><td class="p-4 font-mono font-bold">${t.id}</td><td class="p-4">${new Date(t.date).toLocaleDateString()}</td><td class="p-4">${t.partner}</td><td class="p-4 text-right font-bold">${formatVND(t.total)}</td><td class="p-4 text-right flex justify-end gap-2">
-                                <button onclick="exportTxToExcel('${tabId}','${t.id}')" title="Xuất Excel" class="text-green-600 p-1 hover:bg-green-50 rounded"><i data-lucide="download" class="w-4 h-4"></i></button>
-                                <button onclick="deleteTx('${tabId}','${t.id}')" title="Xóa" class="text-red-400 p-1 hover:bg-red-50 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                            </td></tr>`).join('')}</tbody>
-                        </table>
-                    </div>
-                `;
-            } else if(tabId === 'partners') {
-                container.innerHTML = `
-                    <div class="flex justify-between items-center mb-6"><h3 class="font-bold">Danh sách đối tác</h3><button onclick="openPartnerModal()" class="btn-primary text-xs">+ Thêm đối tác</button></div>
-                    <div class="misa-card overflow-hidden">
-                        <table class="w-full text-left text-sm">
-                             <tbody>${state.partners.map(p => `<tr class="border-b"><td class="p-4"><span class="status-pill ${p.type==='ncc'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}">${p.type==='ncc'?'NCC':'KH'}</span></td><td class="p-4 font-bold">${p.name}</td><td class="p-4 text-right"><button onclick="deletePartner('${p.id}')" class="text-red-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td></tr>`).join('')}</tbody>
-                        </table>
-                    </div>
-                `;
-            } else if(tabId === 'settings') {
-                container.innerHTML = `
-                    <div class="max-w-md misa-card p-6">
-                        <h4 class="font-bold mb-4 uppercase text-xs">Cấu hình hệ thống</h4>
-                        <div class="space-y-4">
-                            <div><label class="text-[10px] font-bold text-slate-400 uppercase">Tên công ty</label><input id="set-name" value="${state.settings.companyName}" class="w-full p-2 border rounded-xl text-sm"></div>
-                            <div><label class="text-[10px] font-bold text-slate-400 uppercase">Mật khẩu xóa dữ liệu</label><input id="set-key" type="password" value="${state.settings.deleteKey}" class="w-full p-2 border rounded-xl text-sm"></div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button onclick="exportDatabase()" class="btn-outline text-xs">Sao lưu .JSON</button>
-                                <label class="btn-outline text-xs text-center cursor-pointer">Phục hồi .JSON<input type="file" class="hidden" onchange="importDatabase(this)"></label>
-                            </div>
-                            <button onclick="saveSettings()" class="btn-primary w-full">Lưu cấu hình</button>
-                        </div>
-                    </div>
-                `;
-            }
-            lucide.createIcons();
-        }
-
-        // --- Inventory Logic ---
-        function renderInvTable(data) {
-            return `
-                <table class="w-full text-left text-sm">
-                    <thead class="bg-slate-50 border-b"><tr class="text-[10px] font-bold text-slate-400 uppercase">
-                        <th class="p-4 w-10 text-center"><input type="checkbox" onchange="toggleSelectAll(this)" ${selectedItems.size === state.inventory.length && state.inventory.length > 0 ? 'checked' : ''}></th>
-                        <th class="p-4">Mã hàng</th><th class="p-4">Tên hàng</th><th class="p-4 text-center">Tồn</th><th class="p-4">Ghi chú</th><th class="p-4 text-right">Giá nhập</th><th class="p-4 text-right">Giá bán</th><th class="p-4"></th>
-                    </tr></thead>
-                    <tbody>${data.map(i => `<tr class="border-b hover:bg-slate-50 ${selectedItems.has(i.id) ? 'bg-indigo-50' : ''}">
-                        <td class="p-4 text-center"><input type="checkbox" onchange="toggleSelectItem('${i.id}')" ${selectedItems.has(i.id) ? 'checked' : ''}></td>
-                        <td class="p-4 font-mono text-slate-400">${i.id.substring(0,8)}...</td><td class="p-4 font-bold">${i.name}</td><td class="p-4 text-center font-black ${i.qty<=0?'text-red-500':'text-indigo-600'}">${i.qty} ${i.unit}</td><td class="p-4 text-xs italic text-slate-500 max-w-xs truncate">${i.note||''}</td><td class="p-4 text-right font-mono">${formatVND(i.priceBuy)}</td><td class="p-4 text-right font-mono text-indigo-700 font-bold">${formatVND(i.priceSell)}</td>
-                        <td class="p-4 text-right"><button onclick="openItemModal('${i.id}')" class="text-indigo-500 mr-2"><i data-lucide="edit-3" class="w-4 h-4"></i></button><button onclick="deleteItem('${i.id}')" class="text-red-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
-                    </tr>`).join('')}</tbody>
-                </table>
-            `;
-        }
-
-        function searchInv(q) {
-            const parts = q.toLowerCase().split('*').map(p => p.trim());
-            const filtered = state.inventory.filter(i => parts.every(p => 
-                i.name.toLowerCase().includes(p) || i.id.toLowerCase().includes(p) || (i.note && i.note.toLowerCase().includes(p))
-            ));
-            document.getElementById('inv-table-container').innerHTML = renderInvTable(filtered);
-            lucide.createIcons();
-        }
-
-        function toggleSelectItem(id) {
-            if(selectedItems.has(id)) selectedItems.delete(id);
-            else selectedItems.add(id);
-            renderContent('inventory');
-        }
-
-        function toggleSelectAll(el) {
-            if(el.checked) state.inventory.forEach(i => selectedItems.add(i.id));
-            else selectedItems.clear();
-            renderContent('inventory');
-        }
-
-        function deleteItem(id) {
-            if(checkDeleteKey()) {
-                state.inventory = state.inventory.filter(x=>x.id!==id);
-                saveState(); renderContent('inventory');
-                showToast("Đã xóa mặt hàng.");
-            } else { showToast("Sai mật khẩu!"); }
-        }
-
-        function deleteMultipleItems() {
-            if(checkDeleteKey()) {
-                state.inventory = state.inventory.filter(i => !selectedItems.has(i.id));
-                selectedItems.clear();
-                saveState(); renderContent('inventory');
-                showToast("Đã xóa hàng loạt.");
-            } else { showToast("Sai mật khẩu!"); }
-        }
-
-        // --- Transaction Management ---
-        function openTxModal(type) {
-            const isP = type === 'purchasing';
-            const m = document.getElementById('modal-container');
-            const partners = state.partners.filter(p => isP ? p.type === 'ncc' : p.type === 'kh');
-            m.innerHTML = `
-                <div class="bg-white w-full max-w-5xl rounded-2xl shadow-2xl p-8 max-h-[95vh] overflow-y-auto custom-scroll">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-black uppercase text-indigo-700">Phiếu ${isP ? 'Nhập kho' : 'Xuất bán'}</h3>
-                        <button onclick="closeModal()"><i data-lucide="x" class="w-6 h-6"></i></button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-6 mb-6">
-                        <div>
-                            <label class="text-[10px] font-bold uppercase text-slate-400">Đối tác</label>
-                            <select id="tx-partner" class="w-full p-2 border rounded-xl text-sm">
-                                <option value="Khách lẻ">Chọn đối tác...</option>
-                                ${partners.map(p => `<option value="${p.name}">${p.name}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold uppercase text-slate-400">Số phiếu</label>
-                            <input id="tx-id" value="${(isP?'PN':'PX')+Date.now().toString().slice(-6)}" class="w-full p-2 border rounded-xl text-sm font-mono">
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4 flex gap-2">
-                        <button onclick="openProductSelector()" class="btn-outline text-indigo-600 text-xs flex items-center gap-1"><i data-lucide="plus-square" class="w-4 h-4"></i> Chọn nhiều từ kho</button>
-                        <button onclick="addTxRow()" class="btn-outline text-xs">+ Thêm dòng trống</button>
-                    </div>
-
-                    <table class="w-full text-sm mb-6">
-                        <thead class="bg-slate-50 text-left text-[10px] font-bold text-slate-400 uppercase">
-                            <tr><th class="p-2">Tên hàng / Mã hàng</th><th class="p-2 w-24">Số lượng</th><th class="p-2 w-36">Đơn giá</th><th class="p-2 w-10"></th></tr>
-                        </thead>
-                        <tbody id="tx-rows"></tbody>
-                    </table>
-
-                    <div class="flex justify-between items-center border-t pt-6">
-                        <div class="text-2xl font-black text-indigo-600" id="tx-total-val">0đ</div>
-                        <button onclick="submitTx('${type}')" class="btn-primary px-10 py-3 rounded-2xl">Lưu chứng từ</button>
-                    </div>
-                </div>
-            `;
-            m.classList.remove('hidden');
-            addTxRow(); lucide.createIcons();
-        }
-
-        function openProductSelector() {
-            tempSelected.clear();
-            const sel = document.createElement('div');
-            sel.id = "product-selector-overlay";
-            sel.className = "fixed inset-0 z-[60] bg-slate-900/80 flex items-center justify-center p-10";
-            sel.innerHTML = `
-                <div class="bg-white w-full max-w-2xl rounded-2xl p-6 flex flex-col h-full max-h-[80vh]">
-                    <div class="flex justify-between mb-4">
-                        <h4 class="font-bold">Chọn mặt hàng từ kho</h4>
-                        <button onclick="document.getElementById('product-selector-overlay').remove()"><i data-lucide="x"></i></button>
-                    </div>
-                    <input type="text" oninput="searchSelector(this.value)" placeholder="Tìm tên hoặc mã..." class="w-full p-2 border rounded-lg mb-4 outline-none focus:ring-2 focus:ring-indigo-500">
-                    <div id="selector-list" class="flex-1 overflow-y-auto custom-scroll border rounded-lg">
-                        ${renderSelectorList(state.inventory)}
-                    </div>
-                    <div class="mt-4 flex justify-end">
-                        <button onclick="confirmProductSelection()" class="btn-primary">Xác nhận chọn</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(sel);
-            lucide.createIcons();
-        }
-
-        function renderSelectorList(data) {
-            return data.map(i => `
-                <label class="flex items-center gap-3 p-3 border-b hover:bg-slate-50 cursor-pointer">
-                    <input type="checkbox" onchange="this.checked ? tempSelected.add('${i.id}') : tempSelected.delete('${i.id}')">
-                    <div class="flex-1">
-                        <div class="font-bold text-sm">${i.name}</div>
-                        <div class="text-[10px] text-slate-400">Mã: ${i.id} | Tồn: ${i.qty} | Giá bán: ${formatVND(i.priceSell)}</div>
-                    </div>
-                </label>
-            `).join('');
-        }
-
-        function searchSelector(q) {
-            const filtered = state.inventory.filter(i => i.name.toLowerCase().includes(q.toLowerCase()) || i.id.toLowerCase().includes(q.toLowerCase()));
-            document.getElementById('selector-list').innerHTML = renderSelectorList(filtered);
-        }
-
-        function confirmProductSelection() {
-            tempSelected.forEach(id => {
-                const item = state.inventory.find(x => x.id === id);
-                if(item) addTxRow(item);
-            });
-            tempSelected.clear();
-            document.getElementById('product-selector-overlay').remove();
-        }
-
-        function addTxRow(item = null) {
-            const tr = document.createElement('tr');
-            tr.className = 'border-b tx-row-item';
-            const isP = document.querySelector('#modal-container h3').innerText.includes('Nhập');
-            tr.innerHTML = `
-                <td class="p-2 relative">
-                    <input type="text" placeholder="Tìm hàng..." value="${item?item.name:''}" data-id="${item?item.id:''}" oninput="searchRowInput(this)" class="search-input w-full p-2 border rounded-lg text-sm">
-                    <div class="search-results-box hidden custom-scroll"></div>
-                </td>
-                <td class="p-2"><input type="number" value="1" oninput="calcTx()" class="row-q w-full p-2 border rounded-lg text-center font-bold"></td>
-                <td class="p-2"><input type="number" value="${item ? (isP?item.priceBuy:item.priceSell) : 0}" oninput="calcTx()" class="row-p w-full p-2 border rounded-lg text-right font-mono"></td>
-                <td class="p-2 text-right"><button onclick="this.parentElement.parentElement.remove(); calcTx();" class="text-red-300 hover:text-red-500"><i data-lucide="minus-circle" class="w-4 h-4"></i></button></td>
-            `;
-            document.getElementById('tx-rows').appendChild(tr);
-            lucide.createIcons();
-            calcTx();
-        }
-
-        function searchRowInput(input) {
-            const q = input.value.toLowerCase();
-            const box = input.nextElementSibling;
-            if(!q) { box.classList.add('hidden'); return; }
-            const res = state.inventory.filter(i => i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q)).slice(0, 5);
-            box.innerHTML = res.map(i => `<div class="p-2 hover:bg-slate-50 cursor-pointer border-b text-xs" onclick="selectRowItem(this, '${i.id}')"><b>${i.name}</b><br><span class="text-[10px] text-slate-400">${i.id} | Tồn: ${i.qty}</span></div>`).join('');
-            box.classList.remove('hidden');
-        }
-
-        function selectRowItem(el, id) {
-            const item = state.inventory.find(x => x.id === id);
-            const row = el.closest('tr');
-            const inp = row.querySelector('.search-input');
-            const isP = document.querySelector('#modal-container h3').innerText.includes('Nhập');
-            inp.value = item.name;
-            inp.dataset.id = item.id;
-            row.querySelector('.row-p').value = isP ? item.priceBuy : item.priceSell;
-            el.parentElement.classList.add('hidden');
-            calcTx();
-        }
-
-        function calcTx() {
-            let total = 0;
-            document.querySelectorAll('.tx-row-item').forEach(r => {
-                total += (parseFloat(r.querySelector('.row-q').value)||0) * (parseFloat(r.querySelector('.row-p').value)||0);
-            });
-            document.getElementById('tx-total-val').innerText = formatVND(total);
-        }
-
-        function submitTx(type) {
-            const isP = type === 'purchasing';
-            const partner = document.getElementById('tx-partner').value;
-            const items = [];
-            let isStockError = false;
-
-            document.querySelectorAll('.tx-row-item').forEach(r => {
-                const id = r.querySelector('.search-input').dataset.id;
-                const q = parseFloat(r.querySelector('.row-q').value) || 0;
-                const p = parseFloat(r.querySelector('.row-p').value) || 0;
-                
-                if(id && q > 0) {
-                    if (!isP) { // Nếu là xuất kho (bán hàng)
-                        const invItem = state.inventory.find(i => i.id === id);
-                        if (!invItem || invItem.qty < q) {
-                            showToast(`Lỗi: ${invItem ? invItem.name : 'Sản phẩm'} không đủ tồn kho!`, false);
-                            isStockError = true;
-                            return;
-                        }
-                    }
-                    items.push({id, q, p});
-                }
-            });
-
-            if(isStockError) return;
-            if(items.length === 0) return showToast("Vui lòng chọn hàng hóa");
-            
-            const tx = { id: document.getElementById('tx-id').value, partner, date: Date.now(), items, total: items.reduce((a,c)=>a+c.q*c.p,0), type: isP?'purchase':'sale' };
-            
-            items.forEach(it => {
-                const inv = state.inventory.find(x => x.id === it.id);
-                if(inv) inv.qty += isP ? it.q : -it.q;
-            });
-
-            if(isP) state.purchases.push(tx); else state.sales.push(tx);
-            saveState(); closeModal(); renderContent(type); showToast("Đã lưu chứng từ");
-        }
-
-        function deleteTx(type, id) {
-            if(confirm("Xóa phiếu này? (Lưu ý: Hành động này KHÔNG hoàn lại kho)")) {
-                if(type==='purchasing') state.purchases = state.purchases.filter(x => x.id !== id);
-                else state.sales = state.sales.filter(x => x.id !== id);
-                saveState(); renderContent(type);
-            }
-        }
-
-        // --- Export/Import Excel ---
-        function exportFullReport() {
-            const invData = state.inventory.map(i => ({ "Mã hàng": i.id, "Tên hàng": i.name, "Tồn kho": i.qty, "Giá nhập": i.priceBuy, "Giá bán": i.priceSell, "Giá trị tồn": i.qty*i.priceBuy }));
-            const partnerData = state.partners.map(p => ({ "Loại": p.type==='ncc'?'NCC':'KH', "Tên": p.name }));
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invData), "Ton Kho");
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partnerData), "Doi Tac");
-            XLSX.writeFile(wb, `Bao_Cao_Tong_Hop_${new Date().toISOString().slice(0,10)}.xlsx`);
-        }
-
-        function exportTxToExcel(type, id) {
-            const list = type === 'purchasing' ? state.purchases : state.sales;
-            const tx = list.find(x => x.id === id);
-            const data = tx.items.map((it, idx) => {
-                const product = state.inventory.find(p => p.id === it.id);
-                return {
-                    "STT": idx + 1,
-                    "Tên hàng": product ? product.name : "N/A",
-                    "Mã hàng": it.id,
-                    "Số lượng": it.q,
-                    "Đơn giá": it.p,
-                    "Thành tiền": it.q * it.p
-                };
-            });
-            data.push({ "STT": "TỔNG CỘNG", "Thành tiền": tx.total });
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Chi Tiet Phieu");
-            XLSX.writeFile(wb, `${tx.id}_${tx.partner}.xlsx`);
-        }
-
-        function exportTxListToExcel(type) {
-             const list = type === 'purchasing' ? state.purchases : state.sales;
-             const data = list.map(tx => ({
-                 "Mã Phiếu": tx.id,
-                 "Ngày": new Date(tx.date).toLocaleDateString('vi-VN'),
-                 "Đối Tác": tx.partner,
-                 "Tổng Tiền": tx.total
-             }));
-             const ws = XLSX.utils.json_to_sheet(data);
-             const wb = XLSX.utils.book_new();
-             XLSX.utils.book_append_sheet(wb, ws, "Danh Sach Phieu");
-             XLSX.writeFile(wb, `Danh_Sach_Phieu_${type}_${new Date().toISOString().slice(0,10)}.xlsx`);
-        }
-
-        function importTxTemplate(input, type) {
-            const isPurchase = type === 'purchasing';
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const wb = XLSX.read(data, {type:'array'});
-                const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                rows.forEach(r => {
-                    const itemName = r['Tên hàng'] || r['Sản phẩm'];
-                    if(itemName) {
-                        let inv = state.inventory.find(i => i.name === itemName);
-                        if(!inv) {
-                            inv = { id: 'IT'+Date.now().toString().slice(-6), name: itemName, unit: 'Cái', qty: 0, priceBuy: 0, priceSell: 0, note: '' };
-                            state.inventory.push(inv);
-                        }
-                        const qty = parseFloat(r['Số lượng'] || 1);
-                        const price = parseFloat(r['Đơn giá'] || 0);
-                        const partner = r['Đối tác'] || "Khách lẻ/NCC mới";
-                        
-                        // Check stock for export
-                        if (!isPurchase && inv.qty < qty) {
-                            alert(`Hàng ${itemName} không đủ tồn kho để xuất từ file Excel (Tồn: ${inv.qty}, Yêu cầu: ${qty})`);
-                            return; // Skip this row
-                        }
-
-                        const tx = {
-                            id: (isPurchase ? 'PN':'PX') + Math.random().toString(36).substr(2, 5).toUpperCase(),
-                            partner: partner,
-                            date: Date.now(),
-                            items: [{ id: inv.id, q: qty, p: price }],
-                            total: qty * price,
-                            type: isPurchase ? 'purchase' : 'sale'
-                        };
-                        if(isPurchase) { state.purchases.push(tx); inv.qty += qty; }
-                        else { state.sales.push(tx); inv.qty -= qty; }
-                    }
-                });
-                saveState(); renderContent(type); showToast('Đã nạp mẫu thành công');
-            };
-            reader.readAsArrayBuffer(input.files[0]);
-        }
-
-        // --- Partners & Settings ---
-        function saveSettings() {
-            state.settings.companyName = document.getElementById('set-name').value;
-            state.settings.deleteKey = document.getElementById('set-key').value;
-            saveState(); location.reload();
-        }
-
-        function exportDatabase() {
-            const blob = new Blob([JSON.stringify(state)], {type:'application/json'});
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "PT_ERP_MASTER_BACKUP.json"; a.click();
-        }
-
-        function importDatabase(input) {
-            const reader = new FileReader();
-            reader.onload = (e) => { 
-                try {
-                    state = JSON.parse(e.target.result); 
-                    saveState(); location.reload(); 
-                } catch(err) { showToast("File không đúng định dạng!"); }
-            };
-            reader.readAsText(input.files[0]);
-        }
-
-        function downloadTemplate() {
-            const ws = XLSX.utils.aoa_to_sheet([["Mã hàng", "Tên hàng", "Số lượng", "Giá nhập", "Giá bán", "Ghi chú"]]);
-            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Template");
-            XLSX.writeFile(wb, "Mau_Nhap_Du_Lieu_Kho.xlsx");
-        }
-
-        function importExcel(input) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const wb = XLSX.read(data, {type:'array'});
-                const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                rows.forEach(r => {
-                    const id = r["Mã hàng"] || 'IT'+Math.random().toString(36).slice(2,7).toUpperCase();
-                    state.inventory.push({ id, name: r["Tên hàng"], qty: parseFloat(r["Số lượng"])||0, priceBuy: parseFloat(r["Giá nhập"])||0, priceSell: parseFloat(r["Giá bán"])||0, note: r["Ghi chú"]||"", unit: r["Đơn vị"]||"Cái" });
-                });
-                saveState(); renderContent('inventory'); showToast("Đã nhập dữ liệu Excel!");
-            };
-            reader.readAsArrayBuffer(input.files[0]);
-        }
-
-        function openPartnerModal() {
-            const m = document.getElementById('modal-container');
-            m.innerHTML = `<div class="bg-white p-6 rounded-2xl w-80 shadow-2xl">
-                <h4 class="font-bold mb-4">Đối tác mới</h4>
-                <select id="p-type" class="w-full mb-3 p-2 border rounded-xl text-sm"><option value="ncc">Nhà cung cấp</option><option value="kh">Khách hàng</option></select>
-                <input id="p-name" placeholder="Tên đối tác..." class="w-full mb-4 p-2 border rounded-xl text-sm font-bold">
-                <button onclick="savePartner()" class="btn-primary w-full py-2">Lưu</button>
-                <button onclick="closeModal()" class="w-full text-xs text-slate-400 mt-2">Hủy</button>
-            </div>`;
-            m.classList.remove('hidden');
-        }
-        function savePartner() {
-            const n = document.getElementById('p-name').value; if(!n) return;
-            state.partners.push({ id: 'PAR-'+Date.now().toString().slice(-4), type: document.getElementById('p-type').value, name: n });
-            saveState(); closeModal(); renderContent('partners');
-        }
-        function deletePartner(id) { if(checkDeleteKey()){ state.partners = state.partners.filter(p=>p.id!==id); saveState(); renderContent('partners'); } }
-
-        // --- Item CRUD ---
-        function openItemModal(id=null) {
-            const i = id ? state.inventory.find(x=>x.id===id) : { id: 'IT'+Date.now().toString().slice(-6), name: '', qty: 0, priceBuy: 0, priceSell: 0, note: '' };
-            const m = document.getElementById('modal-container');
-            m.innerHTML = `<div class="bg-white p-6 rounded-2xl w-96 shadow-2xl">
-                <h4 class="font-bold mb-4 uppercase text-sm text-indigo-600">${id?'Cập nhật mặt hàng':'Thêm mặt hàng mới'}</h4>
-                <div class="space-y-4">
-                    <div><label class="text-[10px] font-bold text-slate-400">Tên mặt hàng</label><input id="m-name" value="${i.name}" class="w-full p-2 border rounded-xl text-sm font-bold"></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[10px] font-bold text-slate-400">Số lượng tồn</label><input id="m-qty" type="number" value="${i.qty}" class="w-full p-2 border rounded-xl text-sm"></div>
-                        <div><label class="text-[10px] font-bold text-slate-400">Đơn vị</label><input id="m-unit" value="${i.unit||'Cái'}" class="w-full p-2 border rounded-xl text-sm"></div>
-                    </div>
-                    <div><label class="text-[10px] font-bold text-slate-400">Ghi chú</label><input id="m-note" value="${i.note||''}" class="w-full p-2 border rounded-xl text-sm"></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[10px] font-bold text-slate-400">Giá nhập</label><input id="m-buy" type="number" value="${i.priceBuy}" class="w-full p-2 border rounded-xl text-sm"></div>
-                        <div><label class="text-[10px] font-bold text-slate-400">Giá bán</label><input id="m-sell" type="number" value="${i.priceSell}" class="w-full p-2 border rounded-xl text-sm"></div>
-                    </div>
-                    <button onclick="saveItem('${id||''}')" class="btn-primary w-full py-2">Lưu dữ liệu</button>
-                    <button onclick="closeModal()" class="w-full text-xs text-slate-400 mt-2">Hủy bỏ</button>
-                </div>
-            </div>`;
-            m.classList.remove('hidden');
-        }
-        function saveItem(oldId) {
-            const name = document.getElementById('m-name').value;
-            if(!name) return showToast("Vui lòng nhập tên hàng!");
-            const obj = { 
-                id: oldId || 'IT'+Date.now().toString().slice(-6), 
-                name: name, 
-                qty: parseFloat(document.getElementById('m-qty').value)||0, 
-                unit: document.getElementById('m-unit').value, 
-                priceBuy: parseFloat(document.getElementById('m-buy').value)||0, 
-                priceSell: parseFloat(document.getElementById('m-sell').value)||0, 
-                note: document.getElementById('m-note').value 
-            };
-            if(oldId) { 
-                const idx = state.inventory.findIndex(x=>x.id===oldId); 
-                state.inventory[idx] = obj; 
-            } else { 
-                state.inventory.push(obj); 
-            }
-            saveState(); closeModal(); renderContent('inventory');
-        }
 
         window.onload = () => {
-            document.getElementById('header-company').innerText = state.settings.companyName;
+            if(state.settings.isLocked) lockSystem();
             switchTab('dashboard');
             setInterval(() => { document.getElementById('live-clock').innerText = new Date().toLocaleString('vi-VN'); }, 1000);
         };
