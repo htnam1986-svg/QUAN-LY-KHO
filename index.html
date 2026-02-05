@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PT ERP - V9.1 (Advanced Features)</title>
+    <title>PT ERP - V10.Custom (Stock Priority)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -92,6 +92,16 @@
 
         const saveState = () => localStorage.setItem('PT_ERP_ENT_STATE', JSON.stringify(state));
 
+        // --- HÀM HỖ TRỢ TÌM KIẾM ĐA NĂNG (Dùng dấu *) ---
+        // Ví dụ: query "sắt*10" sẽ tìm item có cả chữ "sắt" và "10"
+        function isMatch(itemText, query) {
+            if (!query) return true;
+            const terms = query.toLowerCase().split('*').map(t => t.trim()).filter(t => t);
+            const text = itemText.toLowerCase();
+            // Tất cả các từ khóa trong chuỗi * phải xuất hiện trong text
+            return terms.every(term => text.includes(term));
+        }
+
         // --- BẢO MẬT ---
         function checkUnlock() {
             if(document.getElementById('unlock-pass').value === state.settings.pass) {
@@ -132,25 +142,21 @@
             lucide.createIcons();
         }
 
-        // --- TỔNG QUAN (CẬP NHẬT: Xem chứng từ & Sửa lỗi link tồn kho) ---
+        // --- TỔNG QUAN (ĐÃ SỬA: Bỏ mục Sắp hết hàng, Thêm trích xuất báo cáo tồn kho) ---
         function renderDashboard(area) {
             const itemsInStock = state.inventory.filter(i => i.qty > 0).length;
-            const lowStockCount = state.inventory.filter(i => i.qty < 5).length;
             const revenue = state.history.filter(h => h.type === 'XUAT').reduce((a, b) => a + b.total, 0);
             
             area.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div class="card p-6 border-t-4 border-blue-500">
                         <div class="text-xs font-bold text-slate-400 mb-1 uppercase">Doanh thu bán</div>
                         <div class="text-2xl font-black">${formatVND(revenue)}</div>
                     </div>
-                    <div onclick="switchTab('inventory', 'low')" class="card p-6 border-t-4 border-orange-500 cursor-pointer hover:bg-orange-50 transition">
-                        <div class="text-xs font-bold text-slate-400 mb-1 uppercase">Sắp hết hàng</div>
-                        <div class="text-2xl font-black text-orange-600">${lowStockCount} mã hàng</div>
-                    </div>
-                    <div onclick="switchTab('inventory', 'all')" class="card p-6 border-t-4 border-emerald-500 cursor-pointer hover:bg-emerald-50 transition">
+                    <div onclick="viewStockReport()" class="card p-6 border-t-4 border-emerald-500 cursor-pointer hover:bg-emerald-50 transition">
                         <div class="text-xs font-bold text-slate-400 mb-1 uppercase">Hàng tồn kho</div>
                         <div class="text-2xl font-black text-emerald-600">${itemsInStock} mã hàng</div>
+                        <div class="text-[10px] text-slate-400 mt-2 flex items-center gap-1"><i data-lucide="file-text" class="w-3 h-3"></i> Bấm để xem báo cáo chi tiết</div>
                     </div>
                 </div>
                 <div class="card p-6">
@@ -175,6 +181,58 @@
             `;
         }
 
+        // Hàm trích xuất dữ liệu ra bảng riêng
+        function viewStockReport() {
+            // Lấy hàng có tồn > 0 và sắp xếp giảm dần theo số lượng
+            const reportData = state.inventory.filter(i => i.qty > 0).sort((a,b) => b.qty - a.qty);
+            const totalStockValue = reportData.reduce((sum, item) => sum + (item.qty * item.priceBuy), 0);
+
+            openModal('Báo cáo chi tiết tồn kho', `
+                <div class="space-y-4">
+                    <div class="flex justify-between items-end border-b pb-4">
+                        <div>
+                            <p class="text-sm text-slate-500">Ngày xuất báo cáo: ${new Date().toLocaleDateString('vi-VN')}</p>
+                            <p class="text-sm text-slate-500">Tổng số mặt hàng: <strong class="text-slate-800">${reportData.length}</strong></p>
+                        </div>
+                        <div class="text-right">
+                             <p class="text-xs text-slate-500 uppercase">Tổng giá trị vốn</p>
+                             <p class="text-xl font-bold text-emerald-600">${formatVND(totalStockValue)}</p>
+                        </div>
+                    </div>
+                    <div class="overflow-auto max-h-[60vh] custom-scroll border rounded-lg">
+                        <table class="w-full text-left table-misa">
+                            <thead class="sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th>Mã SP</th>
+                                    <th>Tên sản phẩm</th>
+                                    <th class="text-center">ĐVT</th>
+                                    <th class="text-right">Số lượng</th>
+                                    <th class="text-right">Giá vốn</th>
+                                    <th class="text-right">Thành tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${reportData.map(item => `
+                                    <tr>
+                                        <td class="font-mono text-xs text-slate-500">${item.id}</td>
+                                        <td class="font-bold">${item.name}</td>
+                                        <td class="text-center text-xs">${item.unit}</td>
+                                        <td class="text-right font-bold text-emerald-600">${item.qty}</td>
+                                        <td class="text-right text-xs">${formatVND(item.priceBuy)}</td>
+                                        <td class="text-right font-bold text-sm">${formatVND(item.qty * item.priceBuy)}</td>
+                                    </tr>
+                                `).join('')}
+                                ${reportData.length === 0 ? '<tr><td colspan="6" class="text-center py-4 text-slate-400">Không có hàng tồn kho.</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button onclick="closeModal()" class="btn border hover:bg-slate-100">Đóng</button>
+                    </div>
+                </div>
+            `);
+        }
+
         function viewHistoryDetail(id) {
             const h = state.history.find(x => x.id === id);
             if(!h) return;
@@ -186,7 +244,6 @@
                     <td class="py-2 border-b text-right font-bold text-sm">${formatVND(i.q * i.p)}</td>
                 </tr>
             `).join('');
-
             openModal(`Chi tiết chứng từ: ${id}`, `
                 <div class="space-y-4">
                     <div class="flex justify-between text-xs text-slate-500">
@@ -217,16 +274,17 @@
             });
         }
 
-        // --- KHO HÀNG (CẬP NHẬT: Xóa nhiều mục) ---
+        // --- KHO HÀNG (ĐÃ SỬA: Sắp xếp ưu tiên hàng tồn, Tìm kiếm dấu *) ---
         function renderInventory(area, filter) {
-            let items = state.inventory;
-            let label = "Tất cả hàng hóa";
-            if(filter === 'low') { items = state.inventory.filter(i => i.qty < 5); label = "Lọc: Sắp hết hàng"; }
+            // Sao chép và sắp xếp: Ưu tiên hàng có qty > 0 lên trước, sau đó sắp theo số lượng giảm dần
+            let items = [...state.inventory].sort((a, b) => b.qty - a.qty);
+            
+            let label = "Tất cả hàng hóa (Ưu tiên còn hàng)";
 
             area.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
                     <div class="flex gap-4 items-center">
-                        <input type="text" id="inv-search" oninput="searchInv(this.value)" placeholder="Tìm kiếm..." class="p-2 border rounded-lg w-64 outline-none focus:ring-2 focus:ring-blue-400">
+                        <input type="text" id="inv-search" oninput="searchInv(this.value)" placeholder="Tìm: tên*mã..." class="p-2 border rounded-lg w-64 outline-none focus:ring-2 focus:ring-blue-400">
                         <span class="text-xs font-bold px-2 py-1 bg-slate-200 rounded text-slate-600">${label}</span>
                         <button id="bulk-del-btn" onclick="bulkDeleteInv()" class="btn btn-danger hidden"><i data-lucide="trash-2" class="w-4 h-4"></i> Xóa mục đã chọn</button>
                     </div>
@@ -250,13 +308,13 @@
         }
 
         function renderInvRows(items) {
-            if(!items || items.length === 0) return `<tr><td colspan="7" class="text-center p-10 text-slate-400 italic">Kho hàng trống.</td></tr>`;
+            if(!items || items.length === 0) return `<tr><td colspan="7" class="text-center p-10 text-slate-400 italic">Kho hàng trống hoặc không tìm thấy.</td></tr>`;
             return items.map(item => `
-                <tr>
+                <tr class="${item.qty <= 0 ? 'opacity-60 bg-slate-50' : ''}">
                     <td class="text-center"><input type="checkbox" class="inv-cb" value="${item.id}" onchange="updateBulkBtn()"></td>
                     <td><div class="font-bold text-slate-800">${item.name}</div><div class="text-[10px] text-blue-500 font-mono">ID: ${item.id}</div></td>
                     <td class="text-slate-500 italic text-xs">${item.note || '-'}</td>
-                    <td class="text-right font-bold ${item.qty < 5 ? 'text-rose-500' : ''}">${item.qty} ${item.unit}</td>
+                    <td class="text-right font-bold ${item.qty < 5 ? 'text-rose-500' : 'text-emerald-600'}">${item.qty} ${item.unit}</td>
                     <td class="text-right text-slate-500">${formatVND(item.priceBuy)}</td>
                     <td class="text-right font-bold">${formatVND(item.priceSell)}</td>
                     <td class="text-center">
@@ -286,18 +344,18 @@
             });
         }
 
-        // --- NHẬP/XUẤT KHO (CẬP NHẬT: Sửa giá, Chặn xuất 0, Sửa lỗi gõ số) ---
+        // --- NHẬP/XUẤT KHO (ĐÃ SỬA: Tìm kiếm dấu *) ---
         function renderDocForm(area, type) {
             docItems = [];
             area.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="md:col-span-2 space-y-4">
                         <div class="card p-4">
-                            <input type="text" oninput="searchDocItem(this.value, '${type}')" placeholder="Tìm tên hoặc mã SP..." class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                            <input type="text" oninput="searchDocItem(this.value, '${type}')" placeholder="Tìm tên*mã (VD: ip*123)..." class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
                             <div id="doc-results" class="mt-2 space-y-1"></div>
                         </div>
                         <div class="card overflow-hidden">
-                            <table class="w-full text-left table-misa">
+                             <table class="w-full text-left table-misa">
                                 <thead><tr><th>Tên hàng</th><th class="w-24 text-center">Số lượng</th><th class="w-32 text-right">Đơn giá</th><th class="text-right">Thành tiền</th><th></th></tr></thead>
                                 <tbody id="doc-body"></tbody>
                             </table>
@@ -323,7 +381,6 @@
             const item = state.inventory.find(i => i.id === id);
             if(!item) return;
             
-            // Chặn xuất khi tồn = 0 
             if(type === 'XUAT' && item.qty <= 0) {
                 alert("Sản phẩm đã hết hàng trong kho!");
                 return;
@@ -337,7 +394,7 @@
                     name: item.name, 
                     q: 1, 
                     p: type === 'NHAP' ? item.priceBuy : item.priceSell 
-                }); 
+                });
             }
             updateDocTable();
             document.getElementById('doc-results').innerHTML = '';
@@ -362,13 +419,11 @@
                     <td class="text-right"><button onclick="docItems.splice(${idx},1);updateDocTable()" class="text-rose-400"><i data-lucide="trash" class="w-4 h-4"></i></button></td>
                 </tr>
             `).join('');
-            
             const total = docItems.reduce((a, b) => a + (b.q * b.p), 0);
             document.getElementById('doc-total').innerText = formatVND(total);
             lucide.createIcons();
         }
 
-        // Sử dụng onblur để tránh lỗi ngắt quãng khi gõ số 
         function updateDocData(idx, field, val) {
             docItems[idx][field] = parseFloat(val) || 0;
             updateDocTable();
@@ -377,8 +432,7 @@
         function submitDoc(type) {
             const partner = document.getElementById('doc-partner').value;
             if(!partner || docItems.length === 0) return alert("Vui lòng nhập đủ thông tin!");
-
-            // Kiểm tra tồn kho lần cuối khi xuất
+            
             if(type === 'XUAT') {
                 for(let di of docItems) {
                     const inv = state.inventory.find(i => i.id === di.id);
@@ -391,13 +445,12 @@
                 if(inv) {
                     if(type === 'NHAP') {
                         inv.qty += di.q;
-                        inv.priceBuy = di.p; // Cập nhật giá nhập mới vào kho 
+                        inv.priceBuy = di.p; 
                     } else {
                         inv.qty -= di.q;
                     }
                 }
             });
-
             const docId = (type==='NHAP'?'NK-':'XK-') + Date.now().toString().slice(-6);
             state.history.push({ 
                 id: docId, 
@@ -405,13 +458,13 @@
                 partner, 
                 total: docItems.reduce((a,b)=>a+(b.q*b.p), 0), 
                 date: new Date().toISOString(),
-                items: JSON.parse(JSON.stringify(docItems)) // Lưu chi tiết để xem lại ở Tổng quan 
+                items: JSON.parse(JSON.stringify(docItems)) 
             });
             saveState();
             showToast(`Đã lập chứng từ ${docId}!`); switchTab('dashboard');
         }
 
-        // --- CÁC MODULE GIỮ NGUYÊN (KHO, ĐỐI TÁC, CÀI ĐẶT) ---
+        // --- CÁC MODULE GIỮ NGUYÊN (KHO CRUD, ĐỐI TÁC, CÀI ĐẶT) ---
         function deleteItem(id) {
             confirmActionWithPassword(() => {
                 state.inventory = state.inventory.filter(i => i.id !== id);
@@ -550,7 +603,8 @@
         }
 
         function restoreJSON(input) {
-            const file = input.files[0]; if (!file) return;
+            const file = input.files[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -562,7 +616,8 @@
         }
 
         function importExcelInventory(input) {
-            const file = input.files[0]; if (!file) return;
+            const file = input.files[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -580,8 +635,13 @@
             reader.readAsArrayBuffer(file);
         }
 
+        // --- TÌM KIẾM ĐÃ NÂNG CẤP (Dùng isMatch) ---
         function searchInv(q) {
-            const f = state.inventory.filter(i => i.name.toLowerCase().includes(q.toLowerCase()) || i.id.toLowerCase().includes(q.toLowerCase()));
+            // Sử dụng hàm isMatch để hỗ trợ tìm kiếm dạng "tên*mã"
+            const f = state.inventory
+                .filter(i => isMatch(i.name + " " + i.id, q))
+                .sort((a,b) => b.qty - a.qty); // Vẫn ưu tiên hàng tồn khi tìm kiếm
+            
             document.getElementById('inventory-body').innerHTML = renderInvRows(f);
             lucide.createIcons();
         }
@@ -589,7 +649,10 @@
         function searchDocItem(q, type) {
             const res = document.getElementById('doc-results');
             if(!q) { res.innerHTML = ''; return; }
-            const filtered = state.inventory.filter(i => i.name.toLowerCase().includes(q.toLowerCase()) || i.id.toLowerCase().includes(q.toLowerCase()));
+            
+            // Tìm kiếm nâng cao với dấu *
+            const filtered = state.inventory.filter(i => isMatch(i.name + " " + i.id, q));
+            
             res.innerHTML = filtered.slice(0,5).map(i => `<div onclick="addDocItem('${i.id}', '${type}')" class="p-3 hover:bg-blue-50 cursor-pointer border rounded flex justify-between bg-white shadow-sm"><div><div class="font-bold text-sm">${i.name}</div><div class="text-[10px] text-blue-500">Tồn: ${i.qty}</div></div><span class="font-bold text-slate-700">${formatVND(type==='NHAP'?i.priceBuy:i.priceSell)}</span></div>`).join('');
         }
 
